@@ -1,21 +1,66 @@
-MIT License
+Licencia AccesoUni (tipo permisiva — prohibida la venta del Software)
+AccesoUni License (permissive — selling the Software is not allowed)
+
+---
+
+### Español
+
+Copyright (c) 2026 Colaboradores de AccesoUni
+
+Se concede permiso, de forma gratuita, a cualquier persona que obtenga una copia
+de este software y los archivos de documentación asociados (el «Software»), a tratar
+el Software sin restricción relevante para el uso habitual, incluyendo, entre otros, los derechos a
+usar, copiar, modificar, fusionar, publicar y distribuir copias gratuitas del Software,
+así como permitir a las personas a quienes se les proporcione el Software hacer lo mismo,
+todo ello siempre que se cumplan las condiciones siguientes:
+
+1. El aviso de copyright anterior y el presente aviso de licencia deben incluirse en todas
+las copias o partes sustanciales del Software.
+
+2. **Prohibición de venta.** No está permitido vender el Software ni exigir pago alguno como
+condición principal para proporcionar este Software o una copia sustancialmente igual.
+Tampoco está permitido ofrecer al público, a cambio de precio u otra compensación habitual de
+contraparte, una copia ejecutable del Software donde dicho programa sea la prestación dominante del
+producto. Quedan excluidas de esta restricción la consultoría técnica, el soporte, la
+personalización sobre una copia ya legítima, u otros servicios en los que el Software no sea
+el objeto económico principal de lo que se vende, siempre sin que esa venta constituya
+vender como tal el código o ejecutables estándar de AccesoUni a terceros.
+
+EL SOFTWARE SE PROPORCIONA «TAL CUAL», SIN GARANTÍA DE NINGÚN TIPO, EXPRESA O
+IMPLÍCITA, INCLUIDAS, EN SU CASO, LAS DE COMERCIABILIDAD, IDONEIDAD PARA UN
+PROPÓSITO PARTICULAR Y NO INFRACCIÓN. EN NINGÚN CASO LOS AUTORES O LOS TITULARES DEL
+COPYRIGHT SERÁN RESPONSABLES DE NINGUNA RECLAMACIÓN, DAÑO U OTRA RESPONSABILIDAD, YA SEA EN
+CONTRATO, EXTRACONTRACTUAL O DE OTRO TIPO, DERIVADA DE O EN RELACIÓN CON EL SOFTWARE O SU
+USO.
+
+---
+
+### English (informative mirror)
 
 Copyright (c) 2026 AccesoUni contributors
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the “Software”), to use, copy, modify, merge, publish,
+and distribute copies of the Software free of charge, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+**No sale.** You may not sell the Software nor make payment the main condition for providing
+this Software or a substantially identical copy. Paid offerings whose dominant deliverable is
+redistributing this Software as-is are not permitted. Technical consulting, customization on top
+of a legitimately obtained copy, or other services where the Software is not the primary
+economic subject of what is sold are not restricted solely by this paragraph.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, ARISING FROM OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+---
+
+Esta licencia **no es** la Licencia MIT estándar: la MIT permite expresamente vender copias;
+aquí ese derecho está restringido. Para usos que impliquen comercialización del Software como
+tal, acuerdos por escrito con los mantenedores suelen ser el camino habitual.

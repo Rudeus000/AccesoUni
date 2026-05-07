@@ -10,7 +10,7 @@ Browser extension and service layer for inclusive university and school websites
 <br />
 
 [![Versión](https://img.shields.io/badge/versi%C3%B3n-0.1.0-2ea44f?style=for-the-badge)](https://github.com/Rudeus000/AccesoUni)
-[![Licencia](https://img.shields.io/badge/licencia-MIT-blue?style=for-the-badge)](LICENSE)
+[![Licencia](https://img.shields.io/badge/licencia-AccesoUni%20%28sin%20venta%29-546e7a?style=for-the-badge)](LICENSE)
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?style=for-the-badge)](https://fastapi.tiangolo.com/)
 [![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?style=for-the-badge)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 
@@ -166,7 +166,7 @@ La documentación interactiva de la API estará disponible en la ruta `/docs` de
 
 ## Licencia
 
-MIT — [LICENSE](LICENSE).
+Licencia propia permisiva (**no es la MIT completa**: se prohíbe **vender** el propio programa); texto completo en [LICENSE](LICENSE).
 
 ---
 
