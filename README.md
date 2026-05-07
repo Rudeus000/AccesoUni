@@ -4,8 +4,8 @@
 
 # AccesoUni
 
-**Extensión de navegador y backend para mejorar la accesibilidad en portales educativos**  
-Accessibility toolkit for university and school websites (Chrome extension + optional API).
+**Extensión de navegador y capa de servicios para accesibilidad en portales educativos**  
+Browser extension and service layer for inclusive university and school websites.
 
 <br />
 
@@ -30,88 +30,70 @@ Panel de ajustes **AccesoUni** sobre un portal real (ejemplo: [ELP](https://www.
 |:-:|:-:|
 | ![AccesoUni: panel de accesibilidad](docs/screenshots/accesouni-pane-elp.png) | ![Sitio con botón de accesibilidad AccesoUni](docs/screenshots/sitio-elp-boton-accesibilidad.png) |
 
-> En `docs/screenshots/` también hay una captura de referencia de estilo de README (inspiración de presentación); las imágenes anteriores son del producto en uso.
+En `docs/screenshots/` se incluye además material de referencia para la presentación del repositorio.
 
 ---
 
-## Qué incluye este repositorio
+## Estructura del monorepositorio
 
-| Carpeta | Descripción |
-|--------|-------------|
-| `extension/` | Extensión **Manifest V3** (popup, content script con TypeScript + esbuild, service worker). |
-| `backend/` | API **FastAPI** (preferencias, integración Supabase, etc.). |
-| `supabase/` | Scripts SQL de esquema y políticas (RLS) de ejemplo. |
-
----
-
-## Requisitos
-
-- **Node.js** 18+ (para compilar la extensión).
-- **Python** 3.11+ y `pip` (para el backend).
-- Cuenta/proyecto **Supabase** si vas a usar la API con base de datos (variables en `backend/.env` según `.env.example`).
+| Ruta | Rol |
+|------|-----|
+| `extension/` | Extensión **Manifest V3**: popup, content script (TypeScript, empaquetado con esbuild), service worker. |
+| `backend/` | API **FastAPI** (preferencias, integración con Supabase y rutas auxiliares). |
+| `supabase/` | Esquema SQL y políticas RLS de referencia. |
+| `dashboard/` | Panel web asociado al ecosistema (si aplica a tu despliegue). |
 
 ---
 
-## Extensión (desarrollo)
+## Requisitos de entorno
+
+| Componente | Versión recomendada |
+|------------|---------------------|
+| Node.js | 18 o superior |
+| Python | 3.11 o superior |
+| Supabase | Proyecto configurado cuando se utilice persistencia remota |
+
+La extensión no incluye `dist/` en el repositorio; tras clonar hay que ejecutar el build indicado más abajo.
+
+---
+
+## Extensión: build y carga local
+
+Desde `extension/`:
 
 ```bash
-cd extension
 npm install
 npm run build
 ```
 
-Luego en Chrome/Edge:
+Esto genera `dist/contentScript.js`. Para probar en **Chrome** o **Edge**: `chrome://extensions` → *Modo de desarrollador* → *Cargar descomprimida* → carpeta `extension/`.
 
-1. Abre `chrome://extensions` (o `edge://extensions`).
-2. Activa **Modo de desarrollador**.
-3. **Cargar extensión sin empaquetar** → selecciona la carpeta `extension/`.
-
-La compilación genera `extension/dist/contentScript.js` (no se versiona; hay que ejecutar `npm run build` tras clonar).
-
-**Atajo útil:** comandos por voz en la pestaña activa → **Alt+Mayús+V** (configurable en el manifest).
+Atajo de comandos por voz en la pestaña activa: **Alt+Mayús+V** (definido en `manifest.json`).
 
 ---
 
-## Backend (opcional)
+## API FastAPI
 
-```bash
-cd backend
-python -m venv .venv
-# Windows: .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-copy .env.example .env   # y completa las variables
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
+El servicio vive en `backend/`. La plantilla de variables está en [`backend/.env.example`](backend/.env.example); copie ese archivo a `.env` en el mismo directorio y complete los valores según su despliegue. Ese archivo está excluido del control de versiones.
 
-No subas nunca `.env` con secretos al repositorio.
+Pasos habituales:
 
----
+1. Crear un entorno virtual en `backend/` e instalar dependencias: `pip install -r requirements.txt`.
+2. Configurar `backend/.env` a partir de `.env.example`.
+3. Arrancar el servidor ASGI, por ejemplo: `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000` con el directorio de trabajo en `backend/`.
 
-## Publicar en GitHub (primer push)
-
-Si el remoto ya está vacío en [AccesoUni](https://github.com/Rudeus000/AccesoUni):
-
-```bash
-git init
-git add .
-git commit -m "Primer commit: AccesoUni (extensión, backend y documentación)"
-git branch -M main
-git remote add origin https://github.com/Rudeus000/AccesoUni.git
-git push -u origin main
-```
-
-Si GitHub muestra el repo como vacío y `git remote` ya existe, solo ejecuta `git push -u origin main` tras el commit.
+La documentación interactiva de la API estará disponible en la ruta `/docs` de su instancia cuando [FastAPI](https://fastapi.tiangolo.com/) la tenga habilitada.
 
 ---
 
 ## Licencia
 
-MIT — véase [LICENSE](LICENSE).
+MIT — [LICENSE](LICENSE).
 
 ---
 
 <div align="center">
 
-Hecho para **inclusión y aprendizaje** en entornos educativos.
+Orientado a **inclusión y aprendizaje** en entornos educativos.
 
 </div>
