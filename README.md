@@ -45,6 +45,84 @@ En `docs/screenshots/` se incluye además material de referencia para la present
 
 ---
 
+## Arquitectura y comunicación
+
+### Visión general
+
+AccesoUni separa tres capas: **extensión en el navegador**, **API FastAPI** y **PostgreSQL gestionado por Supabase**. La extensión no ejecuta SQL ni llama al REST de Postgres directamente para la lógica de negocio: habla con la API en JSON; quien persiste y valida contra la base es el backend, usando el cliente oficial de Supabase con la **clave `service_role`**.
+
+```mermaid
+flowchart LR
+  subgraph browser [Navegador]
+    POP[Popup / storage]
+    BG[Service worker]
+    CS[Content script]
+  end
+  subgraph api [AccesoUni API]
+    FAST[FastAPI]
+    OPS["supabase_ops + auth"]
+  end
+  subgraph supa [Supabase]
+    PG[(PostgreSQL + RLS)]
+    AUTH[Auth / JWT]
+  end
+  BG -->|"GET /api/v1/public/allowed-domains"| FAST
+  POP -->|"Bearer JWT"| FAST
+  CS -->|"Bearer JWT"| FAST
+  FAST --> OPS
+  OPS -->|"service_role"| PG
+  OPS -->|"get_user(jwt)"| AUTH
+```
+
+### Extensión (Manifest V3)
+
+| Pieza | Función |
+|-------|---------|
+| **Service worker** (`background.js`) | Resuelve la URL base del API (`ACCOUNI_BACKEND_API_BASE_URL` en código; en empaques de producción se sustituye antes de firmar la extensión). Consulta periódicamente la lista de dominios permitidos y registra dinámicamente el content script solo en patrones que coinciden con instituciones **activas**. |
+| **Popup** | Aplica ajustes locales (Chrome storage) y, al guardar en servidor, envía `PUT /api/v1/preferences` con `Authorization: Bearer` y el dominio del sitio abierto para asociar la petición a una institución. |
+| **Content script** | Inyectado solo en hosts autorizados. Puede enviar telemetría de auditoría con `POST /api/v1/audit/scan` autenticada igual que las preferencias. |
+
+El token JWT que porta la extensión es el **`access_token` de sesión Supabase**. El flujo habitual es abrir `/extension-login` servido por la propia API: la página usa la **clave `anon`** en el navegador para hacer `signInWithPassword`; el usuario copia el token y lo guarda en la extensión. Esa clave `anon` no sustituye a `service_role`: solo permite el login público ante Auth; los datos tabulares siguen atravesando FastAPI.
+
+### API FastAPI
+
+Rutas agrupadas bajo prefijos típicos:
+
+| Área | Ejemplos | Autenticación |
+|------|----------|----------------|
+| Pública | `GET /api/v1/public/allowed-domains` | Ninguna. Devuelve los dominios *apex* de instituciones con `status = active` para alinear la inyección de scripts con las reglas de negocio del backend. |
+| Preferencias | `PUT /api/v1/preferences` | `HTTPBearer`: JWT válido (`get_current_user` valida contra Supabase Auth). |
+| Auditoría | `POST /api/v1/audit/scan` | Mismo esquema. |
+| Extensión | `GET /extension-login` | HTML sin token; incorpora anon key solo en esa página para el flujo de inicio de sesión. |
+
+Toda escritura sensible pasa por funciones en `backend/app/supabase_ops.py`, que crean un cliente con **`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`**. Ese cliente actúa con privilegios elevados sobre Postgres respecto de un cliente *anon*: las políticas RLS del proyecto protegen accesos directos desde otros clientes; el servidor se considera de confianza.
+
+Antes de aceptar `preferences` o `audit`, la API comprueba que el **`domain`** enviado (hostname del portal) pertenezca a una fila `institutions` **activa** y resuelva un `institution_id` coherente con la lógica `lookup_institution_for_hostname` (coincidencia del dominio base o subdominios).
+
+### Modelo de datos (Supabase / Postgres)
+
+Definición canónica y políticas en [`supabase/schema.sql`](supabase/schema.sql). Entidades relevantes para la extensión y la API:
+
+| Tabla | Propósito |
+|-------|-----------|
+| `institutions` | Institución con `domain` único, `plan`, `status` (`pending_payment`, `active`, `suspended`) y vigencia opcional (`subscription_end`). |
+| `users` | Perfil ligado al `id` del usuario en Supabase Auth y a `institution_id`. |
+| `user_preferences` | Contraste, tamaño y familia de fuente, interlineado, modo de color (`user_id` único). El popup puede enviar más campos en JSON; los que no están modelados en el body Pydantic se ignoran en el endpoint de preferencias. |
+| `activity_logs` | Eventos de uso (`preferences_saved`, `scan_submitted`, etc.) con `metadata` JSON. |
+| `compliance_logs` | Resultados de escaneo por URL (errores, correcciones, `wcag_score`). |
+| `compliance_reports` | Informes agregados (PDF en almacenamiento, puntuación). |
+| `institution_admins` | Relación usuario–institución para administración. |
+
+Las tablas tienen **RLS habilitado** para escenarios donde clientes usan claves de rol distintas. El backend con `service_role` centraliza las operaciones que hoy implementa el producto. Si el listado de instituciones activas falla al usar una clave incorrecta, el repositorio incluye scripts de apoyo como [`supabase/rls_allow_anon_read_active_institutions.sql`](supabase/rls_allow_anon_read_active_institutions.sql) según el despliegue.
+
+### Resumen de flujos
+
+1. **Permitir sitios**: el service worker obtiene dominios activos → construye patrones `*://dominio/*` → registra el content script; si el API no responde, puede usarse caché local con antigüedad limitada.
+2. **Sincronizar preferencias**: popup → `PUT /api/v1/preferences` con JWT → validación de institución activa → `upsert` en `users` y `user_preferences` → registro en `activity_logs`.
+3. **Auditoría**: content script → `POST /api/v1/audit/scan` → `compliance_logs` + `activity_logs`.
+
+---
+
 ## Requisitos de entorno
 
 | Componente | Versión recomendada |
