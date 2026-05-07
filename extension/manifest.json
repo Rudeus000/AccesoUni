@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "AccesoUni",
+  "version": "0.1.0",
+  "description": "Accesibilidad web para portales universitarios (AccesoUni).",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["storage", "activeTab", "scripting", "alarms"],
+  "web_accessible_resources": [
+    {
+      "resources": ["popup.html", "popup.css", "popup.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "action": {
+    "default_title": "AccesoUni",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "commands": {
+    "ACCESSOUNI_VOICE_COMMANDS": {
+      "description": "Iniciar comandos por voz en la pestaña activa (microfono en la pagina)",
+      "suggested_key": {
+        "default": "Alt+Shift+V",
+        "mac": "Alt+Shift+V"
+      }
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
+

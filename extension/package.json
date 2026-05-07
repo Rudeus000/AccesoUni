@@ -1,0 +1,16 @@
+{
+  "name": "accesouni-extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "typescript": "^5.5.4",
+    "@types/chrome": "^0.0.256"
+  }
+}
+
