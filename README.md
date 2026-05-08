@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/branding/accesouni-logo-github.png" alt="AccesoUni — logo oficial" width="520" />
+<img src="docs/branding/accesouni-logo-github.png" alt="AccesoUni — logo oficial" width="440" />
 
 # AccesoUni
 
