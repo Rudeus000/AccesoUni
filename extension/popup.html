@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AccesoUni · Ajustes</title>
+    <title>AccesoUni</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
@@ -15,8 +15,8 @@
         </div>
         <div class="shell-hero__text">
           <p class="shell-hero__product">AccesoUni</p>
-          <h1 class="shell-hero__title">Ajustes de accesibilidad</h1>
-          <p class="shell-hero__lede">Perfiles listos para usar y controles finos. Todo se aplica al sitio de la pestaña actual.</p>
+          <h1 class="shell-hero__title">Accesibilidad</h1>
+          <p class="shell-hero__lede">Preferencias para la pestaña actual.</p>
         </div>
       </header>
 
@@ -27,9 +27,23 @@
         </aside>
 
         <div id="popup-access-controls">
+        <section class="sheet-section sheet-section--toggle" aria-labelledby="power-heading">
+          <h2 id="power-heading" class="sheet-section__subhead">Activación</h2>
+          <label class="power-card">
+            <input id="extension_active" type="checkbox" checked class="power-card__input visually-hidden" />
+            <span class="power-card__body">
+              <span class="power-card__title">Extensión activa</span>
+              <span class="power-card__meta">Desmarcar pausa AccesoUni sin desinstalar.</span>
+            </span>
+            <span class="power-card__switch" aria-hidden="true"></span>
+          </label>
+        </section>
+
         <section class="sheet-section sheet-section--profiles" aria-labelledby="profiles-heading">
-          <h2 id="profiles-heading" class="sheet-section__lead">Elija el perfil adecuado para usted</h2>
-          <p class="sheet-section__hint">Un solo perfil activo. En <strong>Personalizado</strong> conserva sus ajustes manuales.</p>
+          <div class="sheet-section__headline">
+            <h2 id="profiles-heading" class="sheet-section__lead">Perfiles</h2>
+            <p class="sheet-section__hint sheet-section__hint--tight">Uno a la vez · detalle completo en <strong>Personalizado</strong></p>
+          </div>
 
           <div class="profile-list" role="presentation">
             <label class="profile-row">
@@ -44,8 +58,8 @@
                 </span>
               </span>
               <span class="profile-row__body">
-                <span class="profile-row__title">Fotosensibilidad y convulsiones</span>
-                <span class="profile-row__desc">Atempera animaciones, parpadeos y refuerzo visual de medios.</span>
+                <span class="profile-row__title">Fotosensibilidad</span>
+                <span class="profile-row__desc">Menos animación y parpadeos.</span>
               </span>
               <span class="profile-row__ico" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
@@ -64,11 +78,8 @@
                 </span>
               </span>
               <span class="profile-row__body">
-                <span class="profile-row__title">Personas con poca visión</span>
-                <span class="profile-row__desc">
-                  Este perfil ajusta el sitio para hacerlo accesible a gran parte de las deficiencias visuales: vista degradada, visión de túnel, cataratas,
-                  glaucoma y otras. Refuerza contraste, tamaño de texto y guías de lectura en enlaces y párrafos.
-                </span>
+                <span class="profile-row__title">Baja visión</span>
+                <span class="profile-row__desc">Texto y contraste más legibles.</span>
               </span>
               <span class="profile-row__ico" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.5"/></svg>
@@ -88,7 +99,7 @@
               </span>
               <span class="profile-row__body">
                 <span class="profile-row__title">TDAH</span>
-                <span class="profile-row__desc">Menos distracción en widgets flotantes y lectura con foco.</span>
+                <span class="profile-row__desc">Menos ruido visual, lectura enfocada.</span>
               </span>
               <span class="profile-row__ico" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="6" rx="1"/><rect x="4" y="13" width="16" height="6" rx="1"/></svg>
@@ -107,11 +118,8 @@
                 </span>
               </span>
               <span class="profile-row__body">
-                <span class="profile-row__title">Perfil de discapacidad cognitiva</span>
-                <span class="profile-row__desc">
-                  Ayuda a la lectura y a la concentración. Ofrece asistencias para autismo, dislexia, CVA u otras condiciones para centrarse en lo esencial: texto algo
-                  más grande, modo enfoque y marcas visuales (líneas guía azules) que enmarcan el contenido principal.
-                </span>
+                <span class="profile-row__title">Cognitivo</span>
+                <span class="profile-row__desc">Texto cómodo, enfoque y guías de lectura.</span>
               </span>
               <span class="profile-row__ico" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="3" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="21" y2="12"/></svg>
@@ -131,10 +139,7 @@
               </span>
               <span class="profile-row__body">
                 <span class="profile-row__title">Niños y familias</span>
-                <span class="profile-row__desc">
-                  Letras un poco más grandes, colores tranquilos y ayuda guiada por voz. Tras cerrar esta ventana, un clic o tecla suele bastar para que el micro escuche
-                  (también Alt+Mayús+V). Diseñado para que sea intuitivo desde el primer uso sin muchos pasos.
-                </span>
+                <span class="profile-row__desc">Tipografía grande, colores suaves, voz guiada.</span>
               </span>
               <span class="profile-row__ico" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3"/><path d="M6 17.8c2-4 14-4 15.8-.2"/><path d="M8 12h8"/></svg>
@@ -153,8 +158,8 @@
                 </span>
               </span>
               <span class="profile-row__body">
-                <span class="profile-row__title">Motor y teclado</span>
-                <span class="profile-row__desc">Foco visible, salto al contenido y apoyo al tabulador.</span>
+                <span class="profile-row__title">Motor · teclado</span>
+                <span class="profile-row__desc">Foco claro y navegación con tab y flechas.</span>
               </span>
               <span class="profile-row__ico" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h2M11 9h2M15 9h2M7 12h8M7 15h5"/><path d="M13 15l2 2 2-2"/></svg>
@@ -174,10 +179,7 @@
               </span>
               <span class="profile-row__body">
                 <span class="profile-row__title">Lector de pantalla</span>
-                <span class="profile-row__desc">
-                  Contraste alto, texto amplio y ayudas semanticas.
-                  Por defecto: primer clic o tecla en la pagina abre comandos por voz (alternativa a Alt+Mayus+V).
-                </span>
+                <span class="profile-row__desc">Alto contraste, texto amplio, voz al primer gesto.</span>
               </span>
               <span class="profile-row__ico" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h16v-4"/><path d="M8 12h.01M12 12h4"/></svg>
@@ -197,7 +199,7 @@
               </span>
               <span class="profile-row__body">
                 <span class="profile-row__title">Adultos mayores</span>
-                <span class="profile-row__desc">Controles amplios, tema claro y lectura cómoda.</span>
+                <span class="profile-row__desc">Lectura cómoda, menos animación, áreas táctiles amplias.</span>
               </span>
               <span class="profile-row__ico" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="3"/><path d="M6 19a6 6 0 0 1 12 0"/><path d="M5 12h2M17 12h2"/></svg>
@@ -217,7 +219,7 @@
               </span>
               <span class="profile-row__body">
                 <span class="profile-row__title">Personalizado</span>
-                <span class="profile-row__desc">Use los controles siguientes con total libertad.</span>
+                <span class="profile-row__desc">Ajustes manuales debajo.</span>
               </span>
               <span class="profile-row__ico" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2"/><circle cx="16" cy="16" r="2"/><path d="M10 8h4M8 10v4M14 16h4M16 14v-4"/></svg>
@@ -226,6 +228,7 @@
           </div>
         </section>
 
+        <div id="manual-controls-section" class="manual-controls-wrap" hidden>
         <section class="sheet-section sheet-section--manual" aria-labelledby="manual-heading">
           <h2 id="manual-heading" class="sheet-section__subhead">Ajustes detallados</h2>
           <div class="field-grid">
@@ -271,28 +274,25 @@
             <li class="check-list__item">
               <label class="check-line">
                 <input id="focus_mode" type="checkbox" />
-                <span class="check-line__text">Modo enfoque (atenua elementos secundarios)</span>
+                <span class="check-line__text">Modo enfoque</span>
               </label>
             </li>
             <li class="check-list__item">
               <label class="check-line">
                 <input id="reduce_motion" type="checkbox" />
-                <span class="check-line__text">Reducir movimiento y animaciones</span>
+                <span class="check-line__text">Menos movimiento</span>
               </label>
             </li>
             <li class="check-list__item">
               <label class="check-line">
                 <input id="semantic_reader" type="checkbox" />
-                <span class="check-line__text">
-                  Narración al cargar cada página y lector semántico. Atajos: Alt+Mayús+H / M (guías), T (leer página), F (leer elemento con foco), I (describir imágenes).
-                  Si usa el perfil «Lector de pantalla», revise también la opción siguiente para abrir comandos por voz con el primer clic o tecla — suele estar activada por defecto.
-                </span>
+                <span class="check-line__text">Narración y lector semántico · atajos Alt+Mayús+H, M, T, F, I</span>
               </label>
             </li>
             <li class="check-list__item">
               <label class="check-line">
                 <input id="visual_alerts" type="checkbox" />
-                <span class="check-line__text">Indicadores visuales para alertas</span>
+                <span class="check-line__text">Alertas visuales</span>
               </label>
             </li>
             <li class="check-list__item">
@@ -304,72 +304,84 @@
             <li class="check-list__item">
               <label class="check-line">
                 <input id="floating_launcher" type="checkbox" />
-                <span class="check-line__text">Acceso rápido flotante en la página</span>
+                <span class="check-line__text">Botón flotante</span>
               </label>
             </li>
             <li class="check-list__item">
               <label class="check-line">
                 <input id="voice_auto_listen" type="checkbox" />
-                <span class="check-line__text">
-                  Primera pulsación fuera de un campo de texto: abrir comandos por voz sin el botón del panel (el perfil «Lector de pantalla» lo trae activado por defecto). También puede usar Alt+Mayús+V desde atajos del navegador.
-                </span>
+                <span class="check-line__text">Primer clic/tecla abre voz (sin botón) · también Alt+Mayús+V</span>
               </label>
             </li>
           </ul>
+
+        </section>
+        </div>
+
+        <section class="sheet-section" aria-labelledby="narration-heading">
+          <h2 id="narration-heading" class="sheet-section__subhead">Narración por voz</h2>
+          <div class="narration-panel" id="narration-panel-block">
+            <label class="field field--span">
+              <span class="field__label">Volumen</span>
+              <input id="narration_volume" type="range" min="0" max="100" step="1" />
+            </label>
+            <label class="check-line narration-panel__mute">
+              <input id="voice_muted" type="checkbox" />
+              <span class="check-line__text">Silenciar voz</span>
+            </label>
+            <div class="btn-row-inline">
+              <button id="voiceMuteBtn" type="button" class="btn btn--outline btn--narrow">Conmutar silencio</button>
+            </div>
+            <p class="narration-panel__engine-hint">Voz del navegador (Web Speech API); preferimos voces neurales en español si existen en el sistema.</p>
+          </div>
+          <p class="sheet-section__hint sheet-section__hint--tight">Válido para toda la lectura en voz.</p>
+        </section>
+
+        <section class="sheet-section sheet-section--actions" aria-labelledby="persist-heading">
+          <h2 id="persist-heading" class="sheet-section__subhead">Guardar en el navegador</h2>
+          <div class="btn-stack btn-stack--tight">
+            <button id="saveLocalBtn" type="button" class="btn btn--primary">Guardar cambios</button>
+            <button id="revertLocalBtn" type="button" class="btn btn--outline">Restablecer cambios</button>
+            <button id="resetAllBtn" type="button" class="btn btn--outline btn--danger">Restablecer todo</button>
+          </div>
+          <p class="sheet-section__hint sheet-section__hint--tight">Guarda en este navegador · pestaña actual.</p>
         </section>
 
         <section class="sheet-section sheet-section--actions" aria-labelledby="actions-heading">
           <h2 id="actions-heading" class="visually-hidden">Acciones</h2>
           <div class="btn-stack">
-            <button id="saveBtn" type="button" class="btn btn--primary">Guardar y sincronizar</button>
+            <button id="saveBtn" type="button" class="btn btn--outline">Guardar en la nube</button>
             <button id="semanticBtn" type="button" class="btn btn--outline">Informe de estructura</button>
             <button id="readPageBtn" type="button" class="btn btn--outline">Leer página en voz</button>
             <button id="readImagesBtn" type="button" class="btn btn--outline">Describir imágenes</button>
             <button id="voiceBtn" type="button" class="btn btn--outline">Activación por voz</button>
           </div>
 
-          <div class="voice-panel" id="voiceHint" aria-label="Comandos de voz">
-            <p class="voice-panel__title">Comandos de voz</p>
-            <ul>
-              <li>
-                <strong>Perfil «Lector de pantalla»:</strong> conviene dejar encendida la opción de <strong>primera tecla o clic</strong> arriba para no buscar el botón. Atajo fijo: <span class="phrase">Alt + Mayús + V</span>.
-              </li>
-              <li>
-                <strong>Otros perfiles:</strong> botón <strong>Activación por voz</strong>, <span class="phrase">Alt + Mayús + V</span>, o primera tecla/clic si marcó la opción.
-              </li>
-              <li>
-                Funciona sobre una pestaña normal <strong>https</strong>: el navegador pide micrófono en esa página cuando empieza a escuchar.
-              </li>
-              <li>
-                Perfil lector de pantalla: <span class="phrase">activate</span>, <span class="phrase">activar perfil ciegos</span>,
-                <span class="phrase">lector de pantalla</span> u otras frases similares.
-              </li>
-              <li>
-                Reaplicar la configuración: <span class="phrase">activar acceso uni</span>, <span class="phrase">activar versión</span>,
-                <span class="phrase">activar accesouni</span> o <span class="phrase">activar modo de voz</span>.
-              </li>
-              <li>
-                <span class="phrase">Leer pantalla</span> o <span class="phrase">leer todo el texto</span> (voz o Alt+Mayús+T).
-                <span class="phrase">Describir imágenes</span> para oír <code>alt</code> y nombres detectados (Alt+Mayús+I).
-              </li>
-              <li>Para dejar de escuchar: <span class="phrase">pare</span>, <span class="phrase">cancelar</span> o <span class="phrase">basta</span>.</li>
-            </ul>
-          </div>
+          <details class="voice-details" id="voiceHint">
+            <summary class="voice-details__summary">Comandos de voz</summary>
+            <div class="voice-details__body">
+              <ul class="voice-details__list">
+                <li>Lector de pantalla: active <span class="phrase">primera tecla/clic</span> · atajo <span class="phrase">Alt+Mayús+V</span>.</li>
+                <li>Otros: botón «Activación por voz», mismo atajo o primera tecla si está marcado.</li>
+                <li>Solo en páginas <strong>https</strong>; el micrófono lo pide el navegador.</li>
+                <li>Ejemplos: <span class="phrase">lector de pantalla</span>, <span class="phrase">activar accesouni</span>, <span class="phrase">leer pantalla</span>, <span class="phrase">describir imágenes</span>.</li>
+                <li>Parar: <span class="phrase">pare</span>, <span class="phrase">cancelar</span>, <span class="phrase">basta</span>.</li>
+              </ul>
+            </div>
+          </details>
 
           <div id="status" class="status status--muted" role="status" aria-live="polite"></div>
         </section>
         </div>
 
-        <section class="sheet-section" aria-labelledby="account-heading">
-          <h2 id="account-heading" class="sheet-section__lead">Cuenta y servidor</h2>
-          <p class="sheet-section__hint">
-            Para guardar preferencias en la nube hace falta una sesión. Abra el inicio de sesión en el mismo API que usa la extensión, copie el token y péguelo aquí.
-          </p>
+        <section class="sheet-section sheet-section--account" aria-labelledby="account-heading">
+          <h2 id="account-heading" class="sheet-section__lead">Cuenta</h2>
+          <p class="sheet-section__hint sheet-section__hint--tight">Inicie sesión en el servidor, copie el JWT y péguelo abajo.</p>
           <div class="btn-stack" style="margin-bottom: 1rem">
             <button id="openServerLoginBtn" type="button" class="btn btn--outline">Abrir inicio de sesión en el servidor</button>
           </div>
           <label class="field">
-            <span class="field__label">Token de sesión (JWT) — pegue el valor mostrado tras entrar</span>
+            <span class="field__label">Token JWT</span>
             <input id="supabase_token_input" type="password" autocomplete="off" spellcheck="false" />
           </label>
           <div class="btn-stack">
@@ -382,7 +394,7 @@
       <footer class="shell-footer">
         <span class="shell-footer__brand">AccesoUni</span>
         <span class="shell-footer__sep" aria-hidden="true">·</span>
-        <span class="shell-footer__tag">Accesibilidad clara para entornos académicos</span>
+        <span class="shell-footer__tag">Acceso inclusivo</span>
       </footer>
     </div>
 

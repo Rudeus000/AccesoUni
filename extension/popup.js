@@ -13,6 +13,9 @@ const DEFAULTS = {
   adaptive_auto: true,
   floating_launcher: true,
   voice_auto_listen: false,
+  extension_active: true,
+  voice_muted: false,
+  narration_volume: 100,
   access_profile: "custom",
 };
 
@@ -75,12 +78,12 @@ const ACCESS_PROFILE_PRESET = {
     adaptive_auto: true,
   },
   child: {
-    contrast: 106,
-    font_size: 132,
+    contrast: 108,
+    font_size: 136,
     font_family: "default",
-    line_spacing: 142,
-    letter_spacing: 4,
-    word_spacing: 10,
+    line_spacing: 148,
+    letter_spacing: 5,
+    word_spacing: 12,
     color_mode: "light",
     focus_mode: true,
     reduce_motion: true,
@@ -119,16 +122,16 @@ const ACCESS_PROFILE_PRESET = {
     voice_auto_listen: true,
   },
   elder: {
-    contrast: 118,
-    font_size: 124,
+    contrast: 124,
+    font_size: 128,
     font_family: "default",
-    line_spacing: 130,
-    letter_spacing: 4,
-    word_spacing: 12,
+    line_spacing: 138,
+    letter_spacing: 5,
+    word_spacing: 14,
     color_mode: "light",
     focus_mode: false,
-    reduce_motion: false,
-    semantic_reader: false,
+    reduce_motion: true,
+    semantic_reader: true,
     visual_alerts: true,
     adaptive_auto: true,
   },
@@ -151,17 +154,125 @@ function mergePreset(profileId, floatingLauncher) {
   };
 }
 
+function deepCloneSettings(s) {
+  return JSON.parse(JSON.stringify(s));
+}
+
+function coalesceBoolLocal(v, fallback) {
+  if (typeof v === "boolean") return v;
+  if (v === "true") return true;
+  if (v === "false") return false;
+  return fallback;
+}
+
 function setStatus(msg, tone = "muted") {
   const el = document.getElementById("status");
   el.textContent = msg;
   el.className = "status status--" + tone;
 }
 
+/** Igual que en content.ts: Web Speech API del navegador; mejor voz ES disponible + ritmo más natural. */
+let preferredSpanishVoicePopup = null;
+let speechVoicesPopupListenerAttached = false;
+
+function normalizeVoiceLangPopup(lang) {
+  return String(lang || "")
+    .trim()
+    .toLowerCase()
+    .replace("_", "-");
+}
+
+function rankSpanishVoiceCandidatePopup(v, preferredLocales) {
+  let score = 0;
+  const bundle = `${v.name}\n${v.voiceURI}`.toLowerCase();
+  const lang = normalizeVoiceLangPopup(v.lang || "");
+
+  if (/\b(neural|natural|premium|enhanced|wavenet)\b/.test(bundle)) score += 120;
+  if (/\bgoogle\b/.test(bundle)) score += 42;
+  if (/\bmicrosoft\b/.test(bundle)) score += 38;
+  if (!v.localService) score += 18;
+  if (/\b(espeak|speech\s*management)\b/.test(bundle)) score -= 90;
+
+  for (let i = 0; i < preferredLocales.length; i++) {
+    const want = normalizeVoiceLangPopup(preferredLocales[i]);
+    if (!want) continue;
+    if (lang === want) score += 58 - i * 5;
+    else if (lang.startsWith(want.slice(0, 2))) score += 22 - Math.min(i, 4);
+  }
+  return score;
+}
+
+function pickBestSpanishVoicePopup() {
+  if (!("speechSynthesis" in window)) return null;
+  try {
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices?.length) return null;
+    const prefs = ["es-pe", "es-419", "es-es", "es-mx", "es-us", "es-co", "es-ar", "es-cl"];
+    let best = null;
+    let bestScore = -Infinity;
+    for (const v of voices) {
+      const lang = normalizeVoiceLangPopup(v.lang || "");
+      if (!lang.startsWith("es")) continue;
+      const sc = rankSpanishVoiceCandidatePopup(v, prefs);
+      if (sc > bestScore) {
+        bestScore = sc;
+        best = v;
+      }
+    }
+    return best;
+  } catch {
+    return null;
+  }
+}
+
+function refreshPreferredSpanishVoicePopup() {
+  preferredSpanishVoicePopup = pickBestSpanishVoicePopup();
+}
+
+function ensureSpeechVoicesListenerPopup() {
+  if (!("speechSynthesis" in window) || speechVoicesPopupListenerAttached) return;
+  speechVoicesPopupListenerAttached = true;
+  refreshPreferredSpanishVoicePopup();
+  window.speechSynthesis.addEventListener("voiceschanged", refreshPreferredSpanishVoicePopup);
+}
+
+function prepareSpeechUtterancePopup(u, lang) {
+  ensureSpeechVoicesListenerPopup();
+  const vol = document.getElementById("narration_volume");
+  const pct = vol ? Math.max(0, Math.min(100, Number(vol.value))) : 100;
+  const m = document.getElementById("voice_muted");
+  u.volume = m && m.checked ? 0 : pct / 100;
+
+  const lc = normalizeVoiceLangPopup(lang || "es-PE");
+  if (lc.startsWith("es")) {
+    if (!preferredSpanishVoicePopup) refreshPreferredSpanishVoicePopup();
+    if (preferredSpanishVoicePopup) {
+      try {
+        u.voice = preferredSpanishVoicePopup;
+      } catch {
+        /* noop */
+      }
+      const vl = normalizeVoiceLangPopup(preferredSpanishVoicePopup.lang || "");
+      u.lang = vl.startsWith("es") ? preferredSpanishVoicePopup.lang : lang;
+    } else {
+      u.lang = lang;
+    }
+    u.rate = 0.94;
+    u.pitch = 0.99;
+  } else {
+    u.lang = lang;
+    u.rate = 1;
+    u.pitch = 1;
+  }
+}
+
 function speak(text) {
   try {
+    const m = document.getElementById("voice_muted");
+    if (m && m.checked) return;
     if (!("speechSynthesis" in window)) return;
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = "es-ES";
+    prepareSpeechUtterancePopup(u, "es-ES");
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   } catch {
@@ -185,10 +296,16 @@ async function getStoredSettings() {
     "adaptive_auto",
     "floating_launcher",
     "voice_auto_listen",
+    "extension_active",
+    "voice_muted",
+    "narration_volume",
     "access_profile",
   ]);
   const merged = { ...DEFAULTS, ...sync };
   merged.access_profile = normalizeAccessProfile(merged.access_profile);
+  merged.extension_active = coalesceBoolLocal(merged.extension_active, DEFAULTS.extension_active);
+  merged.voice_muted = coalesceBoolLocal(merged.voice_muted, DEFAULTS.voice_muted);
+  merged.narration_volume = Math.max(0, Math.min(100, Number(merged.narration_volume ?? DEFAULTS.narration_volume)));
   return merged;
 }
 
@@ -335,7 +452,9 @@ async function syncSiteAccessGate() {
 
 async function wireUpUI() {
   const settings = await getStoredSettings();
+  let openSnapshot = deepCloneSettings(settings);
 
+  const elExtensionActive = document.getElementById("extension_active");
   const elContrast = document.getElementById("contrast");
   const elFontSize = document.getElementById("font_size");
   const elFontFamily = document.getElementById("font_family");
@@ -350,8 +469,24 @@ async function wireUpUI() {
   const elAdaptiveAuto = document.getElementById("adaptive_auto");
   const elFloatingLauncher = document.getElementById("floating_launcher");
   const elVoiceAutoListen = document.getElementById("voice_auto_listen");
+  const elVoiceMuted = document.getElementById("voice_muted");
+  const elNarrationVolume = document.getElementById("narration_volume");
+  const manualWrap = document.getElementById("manual-controls-section");
+  const profileList = document.querySelector(".profile-list");
+  const narrationPanel = document.getElementById("narration-panel-block");
+
+  function updateProfileHighlight() {
+    const v = document.querySelector('input[name="access_profile"]:checked')?.value || "custom";
+    if (profileList) profileList.setAttribute("data-active-profile", v);
+  }
+
+  function updateManualAndNarrationVisibility() {
+    const pid = normalizeAccessProfile(document.querySelector('input[name="access_profile"]:checked')?.value);
+    if (manualWrap) manualWrap.hidden = pid !== "custom";
+  }
 
   function syncFormFromSettings(s) {
+    if (elExtensionActive) elExtensionActive.checked = Boolean(s.extension_active);
     elContrast.value = s.contrast;
     elFontSize.value = s.font_size;
     elFontFamily.value = s.font_family;
@@ -366,9 +501,13 @@ async function wireUpUI() {
     elAdaptiveAuto.checked = Boolean(s.adaptive_auto);
     elFloatingLauncher.checked = Boolean(s.floating_launcher);
     elVoiceAutoListen.checked = Boolean(s.voice_auto_listen);
+    if (elVoiceMuted) elVoiceMuted.checked = Boolean(s.voice_muted);
+    if (elNarrationVolume) elNarrationVolume.value = String(Math.max(0, Math.min(100, Number(s.narration_volume ?? 100))));
     const pid = normalizeAccessProfile(s.access_profile);
     const r = document.querySelector(`input[name="access_profile"][value="${pid}"]`);
     if (r) r.checked = true;
+    updateProfileHighlight();
+    updateManualAndNarrationVisibility();
   }
 
   syncFormFromSettings(settings);
@@ -394,11 +533,16 @@ async function wireUpUI() {
       adaptive_auto: elAdaptiveAuto.checked,
       floating_launcher: elFloatingLauncher.checked,
       voice_auto_listen: elVoiceAutoListen.checked,
+      extension_active: elExtensionActive ? elExtensionActive.checked : DEFAULTS.extension_active,
+      voice_muted: elVoiceMuted ? elVoiceMuted.checked : DEFAULTS.voice_muted,
+      narration_volume: elNarrationVolume
+        ? Math.max(0, Math.min(100, Number(elNarrationVolume.value)))
+        : DEFAULTS.narration_volume,
       access_profile,
     };
   }
 
-  let applyDebounceTimer;
+  let quickPersistTimer;
 
   async function persistAndReapplyToActiveTab(values, opts = {}) {
     await saveStoredSettings(values);
@@ -416,32 +560,42 @@ async function wireUpUI() {
     }
   }
 
-  /** Ajustes manuales: fuerza modo personalizado. */
-  function scheduleApplyManual() {
-    clearTimeout(applyDebounceTimer);
-    applyDebounceTimer = setTimeout(() => {
-      const c = document.getElementById("profile_radio_custom");
-      if (c) c.checked = true;
-      void persistAndReapplyToActiveTab(readValuesFromForm());
-    }, 220);
+  function scheduleQuickPersist() {
+    clearTimeout(quickPersistTimer);
+    quickPersistTimer = setTimeout(() => {
+      const v = readValuesFromForm();
+      void persistAndReapplyToActiveTab(v);
+      openSnapshot = deepCloneSettings(v);
+    }, 180);
+  }
+
+  /** Edición manual: perfil personalizado sin guardar en bloque (use «Guardar cambios»). */
+  function markManualCustom() {
+    const c = document.getElementById("profile_radio_custom");
+    if (c) c.checked = true;
+    updateProfileHighlight();
+    updateManualAndNarrationVisibility();
   }
 
   document.querySelectorAll('input[name="access_profile"]').forEach((inp) => {
     inp.addEventListener("change", async () => {
       if (!inp.checked) return;
+      updateProfileHighlight();
       const pid = inp.value;
       const flo = elFloatingLauncher.checked;
       if (pid === "custom") {
-        await persistAndReapplyToActiveTab(readValuesFromForm(), { announceVoiceSummary: true });
-      } else {
-        const merged = mergePreset(pid, flo);
-        syncFormFromSettings(merged);
-        await persistAndReapplyToActiveTab(merged, { announceVoiceSummary: true });
+        updateManualAndNarrationVisibility();
+        return;
       }
+      const merged = mergePreset(pid, flo);
+      syncFormFromSettings(merged);
+      await persistAndReapplyToActiveTab(merged, { announceVoiceSummary: true });
+      openSnapshot = deepCloneSettings(merged);
+      setStatus("Perfil aplicado.", "secondary");
     });
   });
 
-  [
+  const manualEls = [
     elContrast,
     elFontSize,
     elFontFamily,
@@ -456,21 +610,62 @@ async function wireUpUI() {
     elAdaptiveAuto,
     elFloatingLauncher,
     elVoiceAutoListen,
-  ].forEach((el) => {
-    el.addEventListener("change", scheduleApplyManual);
-    if (el.type === "number") el.addEventListener("input", scheduleApplyManual);
+  ];
+  manualEls.forEach((el) => {
+    el.addEventListener("change", () => {
+      markManualCustom();
+      updateManualAndNarrationVisibility();
+    });
+    if (el.type === "number") el.addEventListener("input", markManualCustom);
   });
 
-  elFloatingLauncher.addEventListener("change", () => void persistAndReapplyToActiveTab(readValuesFromForm()));
+  elExtensionActive?.addEventListener("change", () => {
+    void (async () => {
+      const v = readValuesFromForm();
+      await persistAndReapplyToActiveTab(v);
+      openSnapshot = deepCloneSettings(v);
+      setStatus(v.extension_active ? "AccesoUni activado en la página." : "AccesoUni desactivado en la página.", "secondary");
+    })();
+  });
+
+  if (narrationPanel) narrationPanel.hidden = false;
+
+  elVoiceMuted?.addEventListener("change", scheduleQuickPersist);
+  elNarrationVolume?.addEventListener("input", scheduleQuickPersist);
+  elNarrationVolume?.addEventListener("change", scheduleQuickPersist);
+
+  document.getElementById("voiceMuteBtn")?.addEventListener("click", () => {
+    if (elVoiceMuted) {
+      elVoiceMuted.checked = !elVoiceMuted.checked;
+      elVoiceMuted.dispatchEvent(new Event("change"));
+    }
+  });
+
+  document.getElementById("saveLocalBtn")?.addEventListener("click", async () => {
+    const values = readValuesFromForm();
+    await persistAndReapplyToActiveTab(values, { announceVoiceSummary: false });
+    openSnapshot = deepCloneSettings(values);
+    setStatus("Cambios guardados en el navegador.", "secondary");
+  });
+
+  document.getElementById("revertLocalBtn")?.addEventListener("click", async () => {
+    syncFormFromSettings(openSnapshot);
+    await persistAndReapplyToActiveTab(openSnapshot);
+    setStatus("Estado restaurado según el último punto guardado en este panel (perfil, activación, voz o «Guardar cambios»).", "secondary");
+  });
+
+  document.getElementById("resetAllBtn")?.addEventListener("click", async () => {
+    const v = { ...DEFAULTS, access_profile: "custom" };
+    syncFormFromSettings(v);
+    await persistAndReapplyToActiveTab(v);
+    openSnapshot = deepCloneSettings(v);
+    setStatus("Ajustes restablecidos a los valores por defecto.", "secondary");
+  });
 
   document.getElementById("saveBtn").addEventListener("click", async () => {
     const values = readValuesFromForm();
-    await persistAndReapplyToActiveTab(values, {
-      announceVoiceSummary:
-        values.access_profile === "blind" ||
-        values.access_profile === "child" ||
-        Boolean(values.semantic_reader),
-    });
+    await persistAndReapplyToActiveTab(values, { announceVoiceSummary: false });
+    openSnapshot = deepCloneSettings(values);
 
     const { token, backendBaseUrl } = await getAuthAndBackendConfig();
     if (!backendBaseUrl) {

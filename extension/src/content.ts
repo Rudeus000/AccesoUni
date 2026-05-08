@@ -30,6 +30,12 @@ type Settings = {
    * no reemplaza el atajo Alt+Mayús+V, ofrece otra forma de dar el gesto sin abrir el panel).
    */
   voice_auto_listen: boolean;
+  /** Si es false, se quitan estilos y paneles de AccesoUni en la página (sin desinstalar la extensión). */
+  extension_active: boolean;
+  /** No reproducir síntesis de voz de la extensión (narración, lectura, avisos hablados). */
+  voice_muted: boolean;
+  /** Volumen de narración 0–100 (se mapea a SpeechSynthesisUtterance.volume). */
+  narration_volume: number;
   access_profile: AccessProfileId;
 };
 
@@ -65,6 +71,9 @@ const DEFAULTS: Settings = {
   adaptive_auto: true,
   floating_launcher: true,
   voice_auto_listen: false,
+  extension_active: true,
+  voice_muted: false,
+  narration_volume: 100,
   access_profile: "custom",
 };
 
@@ -126,14 +135,14 @@ const ACCESS_PROFILE_PRESET: Record<Exclude<AccessProfileId, "custom">, Omit<Set
     visual_alerts: true,
     adaptive_auto: true,
   },
-  /** Texto grande, pocas distracciones, voz rápida; pensado niños / familias. */
+  /** Texto grande, interfaz tranquila y líneas-guía claras; pensado niños y familias. */
   child: {
-    contrast: 106,
-    font_size: 132,
+    contrast: 108,
+    font_size: 136,
     font_family: "default",
-    line_spacing: 142,
-    letter_spacing: 4,
-    word_spacing: 10,
+    line_spacing: 148,
+    letter_spacing: 5,
+    word_spacing: 12,
     color_mode: "light",
     focus_mode: true,
     reduce_motion: true,
@@ -173,16 +182,16 @@ const ACCESS_PROFILE_PRESET: Record<Exclude<AccessProfileId, "custom">, Omit<Set
     voice_auto_listen: true,
   },
   elder: {
-    contrast: 118,
-    font_size: 124,
+    contrast: 124,
+    font_size: 128,
     font_family: "default",
-    line_spacing: 130,
-    letter_spacing: 4,
-    word_spacing: 12,
+    line_spacing: 138,
+    letter_spacing: 5,
+    word_spacing: 14,
     color_mode: "light",
     focus_mode: false,
-    reduce_motion: false,
-    semantic_reader: false,
+    reduce_motion: true,
+    semantic_reader: true,
     visual_alerts: true,
     adaptive_auto: true,
   },
@@ -225,6 +234,9 @@ function flattenSettingsForSync(s: Settings): Record<string, string | number | b
     adaptive_auto: s.adaptive_auto,
     floating_launcher: s.floating_launcher,
     voice_auto_listen: s.voice_auto_listen,
+    extension_active: s.extension_active,
+    voice_muted: s.voice_muted,
+    narration_volume: s.narration_volume,
     access_profile: s.access_profile,
   };
 }
@@ -282,9 +294,135 @@ function resetStickyAdaptive() {
 let lastCommittedExtensionCss = "";
 let domMutationReapplyObserver: MutationObserver | null = null;
 let mutationReapplyDebounceTimer: number | undefined;
+let speechQueueParts: string[] = [];
+let speechQueueLang = "es-PE";
+let speechQueueIndex = 0;
+let speechQueueActive = false;
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
+}
+
+function narrationVolume01(): number {
+  return clamp(Number(hotkeySettings.narration_volume ?? 100), 0, 100) / 100;
+}
+
+/** Aplica volumen y silencio de narración (preferencias actuales en página). */
+function attachSpeechVolume(u: SpeechSynthesisUtterance): void {
+  u.volume = hotkeySettings.voice_muted ? 0 : narrationVolume01();
+}
+
+/**
+ * Narración: Web Speech API nativa del navegador (`speechSynthesis`), sin API de pago en servidor.
+ * Chrome/Edge suelen ofrecer voces «Neural» / en la nube si están instaladas; si no, usa la voz del sistema.
+ */
+let preferredSpanishVoice: SpeechSynthesisVoice | null = null;
+let speechVoicesListenerAttached = false;
+
+function normalizeVoiceLang(lang: string): string {
+  return lang.trim().toLowerCase().replace("_", "-");
+}
+
+function rankSpanishVoiceCandidate(v: SpeechSynthesisVoice, preferredLocales: string[]): number {
+  let score = 0;
+  const bundle = `${v.name}\n${v.voiceURI}`.toLowerCase();
+  const lang = normalizeVoiceLang(v.lang || "");
+
+  if (/\b(neural|natural|premium|enhanced|wavenet)\b/.test(bundle)) score += 120;
+  if (/\bgoogle\b/.test(bundle)) score += 42;
+  if (/\bmicrosoft\b/.test(bundle)) score += 38;
+  if (!v.localService) score += 18;
+  if (/\b(espeak|speech\s*management)\b/.test(bundle)) score -= 90;
+
+  for (let i = 0; i < preferredLocales.length; i++) {
+    const want = normalizeVoiceLang(preferredLocales[i]);
+    if (!want) continue;
+    if (lang === want) score += 58 - i * 5;
+    else if (lang.startsWith(want.slice(0, 2))) score += 22 - Math.min(i, 4);
+  }
+  return score;
+}
+
+function pickBestSpanishVoice(): SpeechSynthesisVoice | null {
+  if (!("speechSynthesis" in window)) return null;
+  try {
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices?.length) return null;
+    const prefs = ["es-pe", "es-419", "es-es", "es-mx", "es-us", "es-co", "es-ar", "es-cl"];
+    let best: SpeechSynthesisVoice | null = null;
+    let bestScore = -Infinity;
+    for (const v of voices) {
+      const lang = normalizeVoiceLang(v.lang || "");
+      if (!lang.startsWith("es")) continue;
+      const sc = rankSpanishVoiceCandidate(v, prefs);
+      if (sc > bestScore) {
+        bestScore = sc;
+        best = v;
+      }
+    }
+    return best;
+  } catch {
+    return null;
+  }
+}
+
+function refreshPreferredSpanishVoice(): void {
+  preferredSpanishVoice = pickBestSpanishVoice();
+}
+
+function ensureSpeechVoicesListener(): void {
+  if (!("speechSynthesis" in window) || speechVoicesListenerAttached) return;
+  speechVoicesListenerAttached = true;
+  refreshPreferredSpanishVoice();
+  window.speechSynthesis.addEventListener("voiceschanged", refreshPreferredSpanishVoice);
+}
+
+/** Ritmo y voz más naturales para español; volumen/silencio según ajustes. */
+function prepareSpeechUtterance(u: SpeechSynthesisUtterance, lang: string): void {
+  ensureSpeechVoicesListener();
+  const lc = normalizeVoiceLang(lang || "es-PE");
+  if (lc.startsWith("es")) {
+    if (!preferredSpanishVoice) refreshPreferredSpanishVoice();
+    if (preferredSpanishVoice) {
+      try {
+        u.voice = preferredSpanishVoice;
+      } catch {
+        /* algunos navegadores rechazan voces no válidas para el utterance */
+      }
+      const vl = normalizeVoiceLang(preferredSpanishVoice.lang || "");
+      u.lang = vl.startsWith("es") ? preferredSpanishVoice.lang : lang;
+    } else {
+      u.lang = lang;
+    }
+    u.rate = 0.94;
+    u.pitch = 0.99;
+  } else {
+    u.lang = lang;
+    u.rate = 1;
+    u.pitch = 1;
+  }
+  attachSpeechVolume(u);
+}
+
+/**
+ * Quita overlays, estilos y datos de AccesoUni sin recargar la página.
+ * Las mejoras ARIA previas en el DOM pueden permanecer hasta un reload.
+ */
+async function stripAccessibilityFromPage(): Promise<void> {
+  document.documentElement.removeAttribute("data-accessouni-mode");
+  document.documentElement.removeAttribute("data-accessouni-profile");
+  document.documentElement.removeAttribute("data-accessouni-media-tier");
+  document.getElementById(SKIP_LINK_ID)?.remove();
+  teardownVisualAlerts();
+  teardownHarshVisualMediaAlerts();
+  teardownReadingMask();
+  teardownFloatingLauncher();
+  document.getElementById(ALERT_CONTAINER_ID)?.remove();
+  document.getElementById(ALERT_STYLE_ID)?.remove();
+  document.getElementById(STYLE_ID)?.remove();
+  const prev = lastCommittedExtensionCss;
+  lastCommittedExtensionCss = "";
+  if (prev) await commitAccessibilityCss("");
 }
 
 /** Evita valores «basura» de sync (ej. cadena «false», que JS trata como verdadero si se usa Boolean directo sobre string). */
@@ -312,6 +450,9 @@ async function loadSettings(): Promise<Settings> {
     "adaptive_auto",
     "floating_launcher",
     "voice_auto_listen",
+    "extension_active",
+    "voice_muted",
+    "narration_volume",
     "access_profile",
   ]);
   return {
@@ -330,6 +471,9 @@ async function loadSettings(): Promise<Settings> {
     adaptive_auto: coalesceBool(sync.adaptive_auto, DEFAULTS.adaptive_auto),
     floating_launcher: coalesceBool(sync.floating_launcher, DEFAULTS.floating_launcher),
     voice_auto_listen: coalesceBool(sync.voice_auto_listen, DEFAULTS.voice_auto_listen),
+    extension_active: coalesceBool(sync.extension_active, DEFAULTS.extension_active),
+    voice_muted: coalesceBool(sync.voice_muted, DEFAULTS.voice_muted),
+    narration_volume: clamp(Number(sync.narration_volume ?? DEFAULTS.narration_volume), 0, 100),
     access_profile: normalizeAccessProfile(sync.access_profile),
   };
 }
@@ -578,7 +722,7 @@ function announceAccessibilityPreamble(settings: Settings, analysis: PageAnalysi
   lastPreambleAnnounceKey = key;
 
   const message = [`AccesoUni`, ...mediaLines, colorLine].filter(Boolean).join(" — ");
-  showVisualAlert(message, analysis.mediaTier === "strong" ? 5200 : 4200);
+  showVisualAlert(message, analysis.mediaTier === "strong" ? 5200 : 4200, analysis.mediaTier);
 }
 
 /** Más etiquetas cuando el perfil orienta al lector de pantalla / formularios. */
@@ -785,11 +929,15 @@ function buildAccessibilityProfileCss(p: AccessProfileId): string {
 
   if (p === "cognitive" || p === "child") {
     const attr = p === "child" ? "child" : "cognitive";
+    const guideGradient =
+      p === "child"
+        ? "linear-gradient(90deg, #f57c00, #00897b)"
+        : "linear-gradient(90deg, #0d47a1, #0288d1)";
     return `
     html[data-accessouni-profile="${attr}"] * {
       background-attachment: scroll !important;
     }
-    /* Líneas-guía azules: enmarcan visualmente el contenido principal */
+    /* Líneas-guía: enmarcan visualmente el contenido principal */
     html[data-accessouni-profile="${attr}"] main:first-of-type {
       padding-block: 0.3rem 0.35rem !important;
     }
@@ -801,8 +949,8 @@ function buildAccessibilityProfileCss(p: AccessProfileId): string {
       height: 3px !important;
       margin-block: 0.5rem !important;
       border-radius: 2px !important;
-      background: linear-gradient(90deg, #0d47a1, #0288d1) !important;
-      box-shadow: 0 0 0 1px rgba(2, 136, 209, 0.28) !important;
+      background: ${guideGradient} !important;
+      box-shadow: 0 0 0 1px rgba(2, 136, 209, 0.22) !important;
     }
     html[data-accessouni-profile="${attr}"] body:not(:has(main)) [role="main"]:first-of-type {
       padding-block: 0.3rem 0.35rem !important;
@@ -815,8 +963,8 @@ function buildAccessibilityProfileCss(p: AccessProfileId): string {
       height: 3px !important;
       margin-block: 0.5rem !important;
       border-radius: 2px !important;
-      background: linear-gradient(90deg, #0d47a1, #0288d1) !important;
-      box-shadow: 0 0 0 1px rgba(2, 136, 209, 0.28) !important;
+      background: ${guideGradient} !important;
+      box-shadow: 0 0 0 1px rgba(2, 136, 209, 0.22) !important;
     }
     html[data-accessouni-profile="${attr}"] body:not(:has(main)):not(:has([role="main"])) #content:first-of-type {
       padding-block: 0.3rem 0.35rem !important;
@@ -829,8 +977,8 @@ function buildAccessibilityProfileCss(p: AccessProfileId): string {
       height: 3px !important;
       margin-block: 0.5rem !important;
       border-radius: 2px !important;
-      background: linear-gradient(90deg, #0d47a1, #0288d1) !important;
-      box-shadow: 0 0 0 1px rgba(2, 136, 209, 0.28) !important;
+      background: ${guideGradient} !important;
+      box-shadow: 0 0 0 1px rgba(2, 136, 209, 0.22) !important;
     }
     html[data-accessouni-profile="${attr}"] main :where(h1, h2, h3),
     html[data-accessouni-profile="${attr}"] article :where(h1, h2, h3),
@@ -841,7 +989,7 @@ function buildAccessibilityProfileCss(p: AccessProfileId): string {
     html[data-accessouni-profile="${attr}"] p,
     html[data-accessouni-profile="${attr}"] li,
     html[data-accessouni-profile="${attr}"] blockquote {
-      max-width: 68ch !important;
+      max-width: ${p === "child" ? "72ch" : "68ch"} !important;
       hyphens: auto !important;
       -webkit-hyphens: auto !important;
     }
@@ -887,6 +1035,11 @@ function buildAccessibilityProfileCss(p: AccessProfileId): string {
       display: inline-flex !important;
       align-items: center !important;
       box-sizing: border-box !important;
+    }
+    html[data-accessouni-profile="elder"] body p,
+    html[data-accessouni-profile="elder"] body li,
+    html[data-accessouni-profile="elder"] body td {
+      line-height: 1.58 !important;
     }
   `;
   }
@@ -947,10 +1100,10 @@ function ensureVisualAlertStyles() {
       to { opacity: 0; }
     }
     @keyframes accessouni-fade {
-      0% { opacity: 0; transform: translateY(-8px); }
+      0% { opacity: 0; transform: translateY(-4px); }
       12% { opacity: 1; transform: translateY(0); }
       88% { opacity: 1; transform: translateY(0); }
-      100% { opacity: 0; transform: translateY(-6px); }
+      100% { opacity: 0; transform: translateY(-3px); }
     }
   `;
   document.documentElement.appendChild(style);
@@ -966,15 +1119,29 @@ function getAlertContainer(): HTMLElement {
   return node;
 }
 
-function showVisualAlert(message: string, holdMs = 3900) {
+function showVisualAlert(message: string, holdMs = 3900, tier: MediaTier = "none") {
   ensureVisualAlertStyles();
   const container = getAlertContainer();
   const badge = document.createElement("div");
   badge.className = "accessouni-alert";
   badge.textContent = message;
+  const border =
+    tier === "strong"
+      ? "2px solid #ea580c"
+      : tier === "mild"
+        ? "2px solid #ca8a04"
+        : "2px solid #fde047";
+  const bg =
+    tier === "strong"
+      ? "rgba(45, 18, 8, 0.94)"
+      : tier === "mild"
+        ? "rgba(28, 25, 8, 0.92)"
+        : "rgba(0, 0, 0, 0.9)";
+  badge.style.border = border;
+  badge.style.background = bg;
   badge.style.opacity = "0";
-  badge.style.transform = "translateY(-10px)";
-  badge.style.transition = "opacity 220ms ease-out, transform 220ms ease-out";
+  badge.style.transform = "translateY(-6px)";
+  badge.style.transition = "opacity 140ms ease-out, transform 140ms ease-out";
   container.appendChild(badge);
   window.requestAnimationFrame(() => {
     badge.style.opacity = "1";
@@ -983,14 +1150,14 @@ function showVisualAlert(message: string, holdMs = 3900) {
 
   window.setTimeout(() => {
     badge.style.opacity = "0";
-    badge.style.transform = "translateY(-8px)";
-    window.setTimeout(() => badge.remove(), 320);
+    badge.style.transform = "translateY(-4px)";
+    window.setTimeout(() => badge.remove(), 200);
   }, holdMs);
 
   const flash = document.createElement("div");
   flash.className = "accessouni-flash";
   document.documentElement.appendChild(flash);
-  window.setTimeout(() => flash.remove(), 500);
+  window.setTimeout(() => flash.remove(), 380);
 }
 
 function teardownVisualAlerts() {
@@ -1113,7 +1280,8 @@ function syncHarshVisualMediaAlerts(settings: Settings) {
               : "Imagen grande";
         showVisualAlert(
           `${kind} ocupando gran parte de la pantalla. El color ya está algo suavizado; aparte la vista si le molesta.`,
-          settings.access_profile === "seizure" ? 6500 : 5200
+          settings.access_profile === "seizure" ? 6500 : 5200,
+          "strong"
         );
         harshVisualMediaIo?.unobserve(t);
       }
@@ -1326,7 +1494,12 @@ function focusSemanticTarget(target: HTMLElement | null) {
   ensureFocusable(target);
   target.id = target.id || SEMANTIC_FOCUS_ID;
   target.focus({ preventScroll: false });
-  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  const instant =
+    hotkeySettings.reduce_motion ||
+    hotkeySettings.access_profile === "seizure" ||
+    hotkeySettings.access_profile === "keyboard" ||
+    (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  target.scrollIntoView({ behavior: instant ? "instant" : "smooth", block: "center" });
 }
 
 function getSemanticOutlineSpeechText(): string {
@@ -1343,9 +1516,10 @@ function readSemanticSummary(opts?: { moveFocus?: boolean }) {
   const moveFocus = opts?.moveFocus !== false;
   const { headings, landmarks } = getSemanticOutline();
   if (!("speechSynthesis" in window)) return;
+  if (hotkeySettings.voice_muted) return;
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(getSemanticOutlineSpeechText());
-  u.lang = "es-ES";
+  prepareSpeechUtterance(u, "es-ES");
   u.onend = () => {
     if (moveFocus) {
       const target = headings[0] ?? landmarks[0] ?? null;
@@ -1456,15 +1630,50 @@ function isNodeTextuallyVisible(node: Node): boolean {
   while (el) {
     if (el instanceof HTMLElement) {
       if (el.getAttribute("aria-hidden") === "true") return false;
+      const cls = `${el.className || ""}`.toLowerCase();
+      if (cls.includes("sr-only") || cls.includes("screen-reader-only") || cls.includes("visually-hidden")) {
+        return false;
+      }
       const tag = el.tagName;
       if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT" || tag === "TEMPLATE") return false;
       const st = window.getComputedStyle(el);
       if (st.display === "none" || st.visibility === "hidden") return false;
       const op = parseFloat(st.opacity);
       if (!Number.isNaN(op) && op < 0.04) return false;
+      const w = parseFloat(st.width);
+      const h = parseFloat(st.height);
+      if ((w <= 1 || h <= 1) && st.overflow === "hidden") return false;
+      if (st.clipPath && st.clipPath !== "none" && st.clipPath.includes("inset(50%")) return false;
+      if (st.clip && st.clip !== "auto" && st.clip.includes("rect(0")) return false;
+      if (st.position === "absolute") {
+        const left = parseFloat(st.left);
+        const top = parseFloat(st.top);
+        if ((!Number.isNaN(left) && left < -1200) || (!Number.isNaN(top) && top < -1200)) return false;
+      }
     }
     el = el.parentElement;
   }
+  return true;
+}
+
+function isSpeechRelevantText(raw: string): boolean {
+  const t = raw.replace(/\s+/g, " ").trim();
+  if (!t) return false;
+  if (t.length < 2) return false;
+  // Evita ruido como "###", "----", "____", "*****"
+  if (/^[#_*=\-~|•·\s]{2,}$/.test(t)) return false;
+  // Evita cadenas tipo "16:9", "1/200", "#1234", "v2.0.1" cuando aparecen aisladas
+  if (/^(#?\d+([:/.,-]\d+){1,5}|v?\d+(\.\d+){1,5})$/.test(t)) return false;
+  // Evita texto compuesto solo por digitos/simbolos sin letras
+  if (!/[A-Za-zÁÉÍÓÚáéíóúÑñÜü]/.test(t) && /[\d#_*=\-~|/.:,%]/.test(t)) return false;
+  // Evita bloques muy "simbolo+numero" sin lenguaje natural
+  const alnum = (t.match(/[A-Za-z0-9ÁÉÍÓÚáéíóúÑñÜü]/g) || []).length;
+  const sym = (t.match(/[^A-Za-z0-9ÁÉÍÓÚáéíóúÑñÜü\s]/g) || []).length;
+  if (alnum <= 2 && sym >= 4) return false;
+  // Evita identificadores largos tipo hash/token suelto
+  if (/^[A-Fa-f0-9_-]{24,}$/.test(t)) return false;
+  // Evita bloques excesivamente largos sin espacios (tokens/paths compactos)
+  if (t.length >= 26 && !/\s/.test(t) && /[_\-/:.#]/.test(t)) return false;
   return true;
 }
 
@@ -1488,6 +1697,7 @@ function extractVisibleTextFromRoot(root: HTMLElement, maxChars: number): string
     if (!parent) continue;
     const piece = (n.textContent || "").replace(/\s+/g, " ").trim();
     if (!piece) continue;
+    if (!isSpeechRelevantText(piece)) continue;
     const isBlock = FULL_READ_BLOCK_TAGS.has(parent.tagName);
     const spacer = segments.length === 0 ? "" : prevBlock || isBlock ? ". " : " ";
     const add = spacer + piece;
@@ -1526,23 +1736,64 @@ function chunkTextForSpeech(text: string, maxLen = 380): string[] {
   return chunks;
 }
 
+function resetSpeechQueueState(): void {
+  speechQueueParts = [];
+  speechQueueLang = "es-PE";
+  speechQueueIndex = 0;
+  speechQueueActive = false;
+}
+
+function speakNextQueuedUtterance(): void {
+  if (!("speechSynthesis" in window)) return;
+  if (!speechQueueActive) return;
+  if (hotkeySettings.voice_muted) {
+    resetSpeechQueueState();
+    return;
+  }
+  if (speechQueueIndex >= speechQueueParts.length) {
+    resetSpeechQueueState();
+    return;
+  }
+  const text = speechQueueParts[speechQueueIndex]?.trim();
+  speechQueueIndex += 1;
+  if (!text) {
+    speakNextQueuedUtterance();
+    return;
+  }
+  const u = new SpeechSynthesisUtterance(text);
+  prepareSpeechUtterance(u, speechQueueLang);
+  u.onend = () => speakNextQueuedUtterance();
+  u.onerror = () => speakNextQueuedUtterance();
+  window.speechSynthesis.speak(u);
+}
+
+function restartSpeechQueueFromCurrentPosition(): void {
+  if (!("speechSynthesis" in window)) return;
+  if (!speechQueueActive) return;
+  if (speechQueueIndex >= speechQueueParts.length) {
+    resetSpeechQueueState();
+    return;
+  }
+  try {
+    window.speechSynthesis.cancel();
+  } catch {
+    // noop
+  }
+  speakNextQueuedUtterance();
+}
+
 /** Encadena locuciones; cancela cualquier síntesis previa. */
 function speakUtteranceQueue(parts: string[], lang = "es-PE"): void {
   const clean = parts.map((x) => x.trim()).filter(Boolean);
   if (!("speechSynthesis" in window) || !clean.length) return;
+  if (hotkeySettings.voice_muted) return;
+  resetSpeechQueueState();
+  speechQueueParts = clean;
+  speechQueueLang = lang;
+  speechQueueIndex = 0;
+  speechQueueActive = true;
   window.speechSynthesis.cancel();
-  let i = 0;
-  const next = () => {
-    if (i >= clean.length) return;
-    const u = new SpeechSynthesisUtterance(clean[i]);
-    i += 1;
-    u.lang = lang;
-    u.rate = 1;
-    u.onend = next;
-    u.onerror = next;
-    window.speechSynthesis.speak(u);
-  };
-  next();
+  speakNextQueuedUtterance();
 }
 
 /** Texto referenciado por aria-labelledby (accesible). */
@@ -1768,6 +2019,84 @@ function classifyVoiceReadingIntent(transcript: string): "full" | "images" | nul
   return null;
 }
 
+let keyboardMotorArrowsInstalled = false;
+
+function isMotorNavTypingContext(el: Element | null): boolean {
+  if (!el || !(el instanceof HTMLElement)) return false;
+  const tag = el.tagName;
+  if (tag === "TEXTAREA") return true;
+  if (el.isContentEditable) return true;
+  if (tag === "SELECT") return true;
+  if (tag === "INPUT") {
+    const t = (el as HTMLInputElement).type.toLowerCase();
+    if (
+      t === "text" ||
+      t === "search" ||
+      t === "email" ||
+      t === "url" ||
+      t === "tel" ||
+      t === "password" ||
+      t === "number" ||
+      t === "" ||
+      t === "date" ||
+      t === "time"
+    )
+      return true;
+  }
+  return false;
+}
+
+function listMotorFocusables(): HTMLElement[] {
+  const sel = [
+    "a[href]",
+    "button:not([disabled])",
+    'input:not([disabled]):not([type="hidden"])',
+    "select:not([disabled])",
+    "textarea:not([disabled])",
+    '[tabindex]:not([tabindex="-1"])',
+  ].join(",");
+  const nodes = Array.from(document.querySelectorAll(sel)) as HTMLElement[];
+  return nodes.filter((el) => {
+    if (el.id === FAB_HOST_ID || el.closest(`#${FAB_HOST_ID}`)) return false;
+    if (IGNORE_ROOT_IDS_FULL_PAGE_READ.has(el.id) || el.closest(`#${ALERT_CONTAINER_ID}`)) return false;
+    if (!isRoughlyVisibleForMenuRead(el)) return false;
+    return true;
+  });
+}
+
+function moveMotorFocusByArrow(delta: number): void {
+  const list = listMotorFocusables();
+  if (!list.length) return;
+  const active = document.activeElement as HTMLElement | null;
+  let idx = active ? list.indexOf(active) : -1;
+  if (idx < 0) idx = delta > 0 ? 0 : list.length - 1;
+  else idx = (idx + delta + list.length) % list.length;
+  const next = list[idx];
+  if (!next) return;
+  next.focus({ preventScroll: false });
+  next.scrollIntoView({ block: "nearest", behavior: "instant" });
+}
+
+function ensureKeyboardMotorArrowNav(): void {
+  if (keyboardMotorArrowsInstalled) return;
+  keyboardMotorArrowsInstalled = true;
+  window.addEventListener(
+    "keydown",
+    (ev: KeyboardEvent) => {
+      if (hotkeySettings.access_profile !== "keyboard") return;
+      if (!hotkeySettings.extension_active) return;
+      if (ev.key !== "ArrowDown" && ev.key !== "ArrowUp") return;
+      if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
+      const tgt = ev.target instanceof Element ? ev.target : null;
+      if (isMotorNavTypingContext(tgt)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      moveMotorFocusByArrow(ev.key === "ArrowDown" ? 1 : -1);
+    },
+    true
+  );
+}
+
 /** Escape cancela la cola larga de locución cuando el lector por voz está activo en ajustes. */
 let speechEscapeInstalled = false;
 function ensureSpeechEscapeToCancel(): void {
@@ -1781,6 +2110,7 @@ function ensureSpeechEscapeToCancel(): void {
       try {
         if (!("speechSynthesis" in window)) return;
         if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+          resetSpeechQueueState();
           window.speechSynthesis.cancel();
           ev.preventDefault();
           ev.stopPropagation();
@@ -1800,6 +2130,7 @@ function ensureSemanticShortcutListener() {
   window.addEventListener(
     "keydown",
     (ev: KeyboardEvent) => {
+      if (!hotkeySettings.extension_active) return;
       if (!ev.altKey || !ev.shiftKey) return;
       const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key.toLowerCase();
       if (k !== "h" && k !== "m" && k !== "t" && k !== "i" && k !== "f") return;
@@ -1887,6 +2218,15 @@ function commitAccessibilityCssFallback(css: string) {
 async function applyAccessibility(settings: Settings, analysis: PageAnalysis): Promise<string[]> {
   const corrections: string[] = [];
   hotkeySettings = settings;
+
+  if (!settings.extension_active) {
+    await stripAccessibilityFromPage();
+    corrections.push("extension_disabled");
+    return corrections;
+  }
+
+  document.documentElement.setAttribute("data-accessouni-media-tier", analysis.mediaTier);
+
   let contrastPct = clamp(settings.contrast, 50, 200);
   let fontPct = clamp(settings.font_size, 80, 200);
   let lineSpacing = clamp(settings.line_spacing, 80, 200);
@@ -2130,7 +2470,7 @@ async function applyAccessibility(settings: Settings, analysis: PageAnalysis): P
   syncVisualAlerts(settings);
   syncHarshVisualMediaAlerts(settings);
   syncReadingFocusMask(settings);
-  syncFloatingLauncher(settings);
+  syncFloatingLauncher(settings, analysis);
 
   if (syncKeyboardSkipLink(settings)) corrections.push("keyboard_skip_link");
 
@@ -2191,8 +2531,10 @@ async function sendScanToBackend(payload: {
 function speak(text: string) {
   try {
     if (!("speechSynthesis" in window)) return;
+    if (hotkeySettings.voice_muted) return;
+    resetSpeechQueueState();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = "es-ES";
+    prepareSpeechUtterance(u, "es-ES");
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   } catch {
@@ -2318,7 +2660,9 @@ function buildChildFriendlyVoiceIntro(settings: Settings): string {
  * Tras cambiar perfil desde el panel: resume por voz lo que hay en la página (clave para quien no ve la pantalla).
  */
 function announceVoiceAfterProfileApply(settings: Settings, analysis: PageAnalysis): void {
+  if (!settings.extension_active) return;
   if (!("speechSynthesis" in window)) return;
+  if (settings.voice_muted) return;
 
   try {
     const label = profileVoiceLabel(settings.access_profile);
@@ -2372,7 +2716,7 @@ function announceVoiceAfterProfileApply(settings: Settings, analysis: PageAnalys
 
     window.speechSynthesis.cancel();
     const intro = new SpeechSynthesisUtterance(line1);
-    intro.lang = "es-ES";
+    prepareSpeechUtterance(intro, "es-ES");
 
     if (!wantStructure) {
       window.speechSynthesis.speak(intro);
@@ -2381,7 +2725,7 @@ function announceVoiceAfterProfileApply(settings: Settings, analysis: PageAnalys
 
     intro.onend = () => {
       const structural = new SpeechSynthesisUtterance(getSemanticOutlineSpeechText());
-      structural.lang = "es-ES";
+      prepareSpeechUtterance(structural, "es-ES");
       structural.onend = () => {
         if (moveAfter && headings[0]) focusSemanticTarget(headings[0]);
         else if (moveAfter && landmarks[0]) focusSemanticTarget(landmarks[0]);
@@ -2396,6 +2740,7 @@ function announceVoiceAfterProfileApply(settings: Settings, analysis: PageAnalys
 
 /** Primera vista de cada URL: narración si el usuario dejó «Narración y lector semántico» activo. */
 function notifyVoiceLandingIfNeeded(settings: Settings, analysis: PageAnalysis): void {
+  if (!settings.extension_active) return;
   if (!settings.semantic_reader) return;
   if (!("speechSynthesis" in window)) return;
   const href =
@@ -2591,6 +2936,7 @@ function getSpeechRecognitionCtor(): (new () => SpeechRecognition) | null {
 function stopWebVoiceCommands(): void {
   webVoiceListening = false;
   webVoiceAttemptsLeft = 0;
+  setFloatingFabListeningVisual(false);
   try {
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   } catch {
@@ -2631,6 +2977,7 @@ function startWebVoiceCommandsOnPage(): void {
   webVoiceRecognition = rec;
   webVoiceAttemptsLeft = 8;
   webVoiceListening = true;
+  setFloatingFabListeningVisual(true);
   webVoiceLastFiredSig = "";
 
   rec.lang = "es-PE";
@@ -2643,6 +2990,7 @@ function startWebVoiceCommandsOnPage(): void {
     if (webVoiceAttemptsLeft <= 0) {
       webVoiceListening = false;
       webVoiceRecognition = null;
+      setFloatingFabListeningVisual(false);
       speak("No se reconoció el comando. Pulse activación por voz e inténtelo de nuevo.");
       return;
     }
@@ -2717,6 +3065,7 @@ function startWebVoiceCommandsOnPage(): void {
     if (ev.error === "not-allowed") {
       webVoiceListening = false;
       webVoiceRecognition = null;
+      setFloatingFabListeningVisual(false);
       speak("Permita el microfono para este sitio en la barra de direcciones.");
       return;
     }
@@ -2772,6 +3121,21 @@ function closeFloatingLauncherPanel() {
   root.querySelector("#au-fab")?.setAttribute("aria-expanded", "false");
 }
 
+function setFloatingFabListeningVisual(active: boolean): void {
+  const host = document.getElementById(FAB_HOST_ID);
+  const root = host?.shadowRoot;
+  const fab = root?.getElementById("au-fab") as HTMLButtonElement | null;
+  if (!fab) return;
+  fab.classList.toggle("au-fab--listening", active);
+  if (active) fab.classList.remove("au-fab--hold");
+  fab.setAttribute(
+    "aria-label",
+    active
+      ? "Micrófono activo. Mantenga presionado para detener o use comando de voz para parar."
+      : "Abrir ajustes de accesibilidad AccesoUni. Mantenga presionado para activar micrófono."
+  );
+}
+
 function onFloatingFabOutsidePointer(ev: PointerEvent) {
   const host = document.getElementById(FAB_HOST_ID);
   if (!host?.shadowRoot) return;
@@ -2797,10 +3161,17 @@ function teardownFloatingLauncher() {
   document.getElementById(FAB_HOST_ID)?.remove();
 }
 
-function refreshFloatingLauncherBadge(host: HTMLElement, settings: Settings) {
+function refreshFloatingLauncherBadge(host: HTMLElement, settings: Settings, mediaTier: MediaTier) {
   const root = host.shadowRoot;
   const badge = root?.querySelector(".au-badge") as HTMLElement | null;
   if (badge) badge.style.display = fabShowsActiveBadge(settings) ? "block" : "none";
+  const panel = root?.querySelector(".au-panel") as HTMLElement | null;
+  if (panel) {
+    panel.classList.remove("au-panel--tier-none", "au-panel--tier-mild", "au-panel--tier-strong");
+    panel.classList.add(
+      mediaTier === "strong" ? "au-panel--tier-strong" : mediaTier === "mild" ? "au-panel--tier-mild" : "au-panel--tier-none"
+    );
+  }
 }
 
 function fabAnchor(): Element {
@@ -2812,7 +3183,7 @@ function ensureFabDocked(host: HTMLElement) {
   if (host.parentElement !== p) p.appendChild(host);
 }
 
-function mountFloatingLauncher(settings: Settings) {
+function mountFloatingLauncher(settings: Settings, mediaTier: MediaTier) {
   installFloatingLauncherGlobalsOnce();
 
   let host = document.getElementById(FAB_HOST_ID) as HTMLElement | null;
@@ -2825,7 +3196,6 @@ function mountFloatingLauncher(settings: Settings) {
     const shadow = host.attachShadow({ mode: "open" });
     shadow.innerHTML = `
       <style>
-        /* Evitar «all: initial» aquí (dejaba al host/display roto en varias páginas y el FAB no llegaba a pintarse). */
         :host {
           pointer-events: none;
           margin: 0;
@@ -2855,11 +3225,23 @@ function mountFloatingLauncher(settings: Settings) {
           max-height: min(86vh, 720px);
           border-radius: 16px;
           overflow: hidden;
-          box-shadow: 0 8px 32px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06);
+          box-shadow: 0 6px 24px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(15, 23, 42, 0.06);
           background: #ffffff;
+          border: 3px solid rgba(13, 148, 136, 0.45);
         }
-        .au-panel--open { display: block; animation: au-pop .18s cubic-bezier(0.2, 0.85, 0.35, 1); }
-        @keyframes au-pop { from { opacity: 0; transform: translateY(8px); } }
+        .au-panel--tier-mild {
+          border-color: rgba(202, 138, 4, 0.75);
+          box-shadow: 0 6px 24px rgba(113, 63, 18, 0.12), 0 0 0 1px rgba(202, 138, 4, 0.35);
+        }
+        .au-panel--tier-strong {
+          border-color: rgba(234, 88, 12, 0.85);
+          box-shadow: 0 6px 24px rgba(124, 45, 18, 0.14), 0 0 0 1px rgba(234, 88, 12, 0.4);
+        }
+        .au-panel--open { display: block; animation: au-pop .12s ease-out; }
+        @keyframes au-pop { from { opacity: 0; transform: translateY(4px); } }
+        @media (prefers-reduced-motion: reduce) {
+          .au-panel--open { animation: none; }
+        }
         iframe {
           width: 100%;
           height: min(620px, 78vh);
@@ -2868,25 +3250,108 @@ function mountFloatingLauncher(settings: Settings) {
         }
         .au-fab {
           pointer-events: auto;
-          width: 54px;
-          height: 54px;
+          width: 58px;
+          height: 58px;
           border-radius: 50%;
-          border: 1px solid rgba(255,255,255,0.35);
+          border: 1px solid rgba(255,255,255,0.5);
           cursor: pointer;
-          background: #0d9488;
-          box-shadow: 0 4px 16px rgba(13, 148, 136, 0.35);
+          background: radial-gradient(circle at 30% 24%, #3dd4c2 0%, #10b5a6 36%, #0f766e 100%);
+          box-shadow: 0 8px 24px rgba(13, 148, 136, 0.38), 0 0 0 2px rgba(255,255,255,0.16) inset;
           display: flex;
           align-items: center;
           justify-content: center;
           position: relative;
           flex-shrink: 0;
-          transition: transform 0.12s ease;
+          transition: transform 0.12s ease, box-shadow 0.18s ease, filter 0.18s ease;
+          overflow: hidden;
         }
-        .au-fab:hover { transform: scale(1.04); }
-        .au-fab:active { transform: scale(0.97); }
+        .au-fab::before {
+          content: "";
+          position: absolute;
+          inset: -2px;
+          border-radius: 50%;
+          background: conic-gradient(from 180deg, rgba(255,255,255,0.16), transparent 28%, rgba(255,255,255,0.24), transparent 62%, rgba(255,255,255,0.16));
+          opacity: 0.42;
+          pointer-events: none;
+        }
+        .au-fab:hover { transform: translateY(-1px) scale(1.02); box-shadow: 0 10px 28px rgba(13, 148, 136, 0.44), 0 0 0 2px rgba(255,255,255,0.18) inset; }
+        .au-fab:active { transform: scale(0.98); }
         .au-fab:focus-visible {
           outline: 3px solid #1b3a4b;
           outline-offset: 3px;
+        }
+        .au-fab__glyph {
+          position: relative;
+          z-index: 1;
+          display: inline-grid;
+          place-items: center;
+        }
+        .au-fab__default {
+          width: 30px;
+          height: 30px;
+          display: block;
+          color: #fff;
+          filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
+          opacity: 1;
+          transform: scale(1);
+          transition: opacity 0.14s ease, transform 0.14s ease;
+        }
+        .au-fab__voice {
+          position: absolute;
+          inset: 0;
+          display: inline-flex;
+          align-items: flex-end;
+          justify-content: center;
+          gap: 2px;
+          opacity: 0;
+          transform: scale(0.92);
+          transition: opacity 0.14s ease, transform 0.14s ease;
+        }
+        .au-fab__mic {
+          width: 24px;
+          height: 24px;
+          display: block;
+          color: #fff;
+          filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
+        }
+        .au-fab__bars {
+          display: inline-flex;
+          gap: 2px;
+          align-items: flex-end;
+          height: 15px;
+        }
+        .au-fab__bars span {
+          width: 2px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.94);
+          height: 4px;
+          opacity: 0.65;
+        }
+        .au-fab--hold .au-fab__default,
+        .au-fab--listening .au-fab__default {
+          opacity: 0;
+          transform: scale(0.88);
+        }
+        .au-fab--hold .au-fab__voice,
+        .au-fab--listening .au-fab__voice {
+          opacity: 1;
+          transform: scale(1);
+        }
+        .au-fab--listening {
+          animation: au-fab-pulse 1.15s ease-in-out infinite;
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5), 0 10px 30px rgba(13, 148, 136, 0.5), 0 0 0 2px rgba(255,255,255,0.2) inset;
+        }
+        .au-fab--listening .au-fab__bars span:nth-child(1) { animation: au-bar 0.52s ease-in-out infinite; }
+        .au-fab--listening .au-fab__bars span:nth-child(2) { animation: au-bar 0.48s ease-in-out infinite 0.08s; }
+        .au-fab--listening .au-fab__bars span:nth-child(3) { animation: au-bar 0.56s ease-in-out infinite 0.16s; }
+        @keyframes au-bar {
+          0%, 100% { height: 4px; opacity: 0.48; }
+          50% { height: 13px; opacity: 1; }
+        }
+        @keyframes au-fab-pulse {
+          0% { filter: saturate(1); }
+          50% { filter: saturate(1.16) brightness(1.04); }
+          100% { filter: saturate(1); }
         }
         .au-badge {
           position: absolute;
@@ -2902,47 +3367,144 @@ function mountFloatingLauncher(settings: Settings) {
           box-shadow: 0 1px 4px rgba(0,0,0,0.35);
           display: none;
         }
+        .au-press-tip {
+          pointer-events: none;
+          font-size: 11px;
+          color: #f8fafc;
+          background: rgba(15, 23, 42, 0.86);
+          border: 1px solid rgba(255,255,255,0.24);
+          border-radius: 999px;
+          padding: 4px 9px;
+          opacity: 0;
+          transform: translateY(2px);
+          transition: opacity 0.16s ease, transform 0.16s ease;
+          white-space: nowrap;
+        }
+        .au-fab:hover + .au-press-tip,
+        .au-fab:focus-visible + .au-press-tip,
+        .au-fab--listening + .au-press-tip {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .au-fab,
+          .au-press-tip {
+            transition: none !important;
+          }
+          .au-fab--listening,
+          .au-fab--listening .au-fab__bars span {
+            animation: none !important;
+          }
+        }
       </style>
       <div class="wrap">
-        <div class="au-panel" aria-label="Panel AccesoUni">
+        <div class="au-panel au-panel--tier-none" aria-label="Panel AccesoUni">
           <iframe id="au-popup-frame" title="AccesoUni · Ajustes de accesibilidad"></iframe>
         </div>
-        <button type="button" id="au-fab" class="au-fab" aria-label="Abrir ajustes de accesibilidad AccesoUni" aria-expanded="false" aria-haspopup="dialog">
-          <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="6" r="2.6" fill="#ffffff"/>
-            <path fill="#ffffff" d="M12 9.5c-1.6 0-3 .7-4 1.8L6.5 13l1.4 1.1 1.2-1.5c.6-.7 1.5-1.1 2.4-1.1h.2c.9 0 1.8.4 2.4 1.1l1.2 1.5L16.5 13 16 11.3c-1-1.1-2.4-1.8-4-1.8z"/>
-            <rect x="9" y="13" width="6" height="9" rx="1.2" fill="#ffffff"/>
-            <path stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" d="M4.5 12h6M13.5 12h6"/>
-          </svg>
+        <button type="button" id="au-fab" class="au-fab" aria-label="Abrir ajustes de accesibilidad AccesoUni. Mantenga presionado para activar micrófono." aria-expanded="false" aria-haspopup="dialog">
+          <span class="au-fab__glyph" aria-hidden="true">
+            <svg class="au-fab__default" width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <circle cx="12" cy="9" r="3.35" stroke="#ffffff" stroke-width="1.65"/>
+              <path d="M6.35 19.25c.95-3.45 3.75-5.75 5.65-5.75s4.7 2.3 5.65 5.75" stroke="#ffffff" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="au-fab__voice">
+              <svg class="au-fab__mic" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 2.75a2.5 2.5 0 0 0-2.5 2.5v4.65a2.5 2.5 0 0 0 5 0V5.25a2.5 2.5 0 0 0-2.5-2.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                <path d="M18.75 10.75a6.75 6.75 0 0 1-13.5 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M12 14.25V21.25M9 21.25h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+              <span class="au-fab__bars"><span></span><span></span><span></span></span>
+            </span>
+          </span>
           <span class="au-badge" aria-hidden="true"></span>
         </button>
+        <span class="au-press-tip" aria-hidden="true">Mantener para voz</span>
       </div>
     `;
 
     const panel = shadow.querySelector(".au-panel") as HTMLElement;
     const fab = shadow.getElementById("au-fab") as HTMLButtonElement;
     const frame = shadow.getElementById("au-popup-frame") as HTMLIFrameElement;
+    let holdTimer: number | undefined;
+    let longPressTriggered = false;
+    let pointerDown = false;
+    let fabCapturedPointerId: number | undefined;
+
+    const clearHold = () => {
+      if (holdTimer !== undefined) window.clearTimeout(holdTimer);
+      holdTimer = undefined;
+      pointerDown = false;
+      fab.classList.remove("au-fab--hold");
+      if (fabCapturedPointerId !== undefined) {
+        try {
+          fab.releasePointerCapture(fabCapturedPointerId);
+        } catch {
+          /* already released */
+        }
+        fabCapturedPointerId = undefined;
+      }
+    };
+
+    const triggerVoiceByHold = () => {
+      if (!hotkeySettings.extension_active) return;
+      if (webVoiceListening) {
+        stopWebVoiceCommands();
+        speak("Comandos de voz desactivados.");
+        return;
+      }
+      startWebVoiceCommandsOnPage();
+    };
+
+    fab.addEventListener("pointerdown", (ev: PointerEvent) => {
+      if (ev.button !== 0) return;
+      pointerDown = true;
+      longPressTriggered = false;
+      fab.classList.add("au-fab--hold");
+      try {
+        fab.setPointerCapture(ev.pointerId);
+        fabCapturedPointerId = ev.pointerId;
+      } catch {
+        fabCapturedPointerId = undefined;
+      }
+      holdTimer = window.setTimeout(() => {
+        if (!pointerDown) return;
+        longPressTriggered = true;
+        triggerVoiceByHold();
+      }, 560);
+    });
+
+    fab.addEventListener("pointerup", () => clearHold());
+    fab.addEventListener("pointercancel", () => clearHold());
+    fab.addEventListener("lostpointercapture", () => clearHold());
 
     fab.addEventListener("click", (ev) => {
       ev.stopPropagation();
+      if (longPressTriggered) {
+        ev.preventDefault();
+        longPressTriggered = false;
+        return;
+      }
       const isOpen = panel.classList.toggle("au-panel--open");
       fab.setAttribute("aria-expanded", isOpen ? "true" : "false");
       if (isOpen && !frame.getAttribute("src")) {
         frame.src = chrome.runtime.getURL("popup.html");
       }
     });
+
+    setFloatingFabListeningVisual(webVoiceListening);
   }
 
   ensureFabDocked(host);
-  refreshFloatingLauncherBadge(host, settings);
+  refreshFloatingLauncherBadge(host, settings, mediaTier);
+  setFloatingFabListeningVisual(webVoiceListening);
 }
 
-function syncFloatingLauncher(settings: Settings) {
-  if (!settings.floating_launcher) {
+function syncFloatingLauncher(settings: Settings, analysis: PageAnalysis) {
+  if (!settings.extension_active || !settings.floating_launcher) {
     teardownFloatingLauncher();
     return;
   }
-  mountFloatingLauncher(settings);
+  mountFloatingLauncher(settings, analysis.mediaTier);
 }
 
 function watchUrlChanges(onChange: () => void) {
@@ -2987,10 +3549,14 @@ const SYNC_SETTING_KEYS = [
   "adaptive_auto",
   "floating_launcher",
   "voice_auto_listen",
+  "extension_active",
+  "voice_muted",
+  "narration_volume",
   "access_profile",
 ] as const;
 
 async function boot() {
+  ensureSpeechVoicesListener();
   const settings = await loadSettings();
   hotkeySettings = settings;
 
@@ -3004,6 +3570,7 @@ async function boot() {
   await pauseDomObserverAndApplyAccessibility(settings);
   setupVoiceAutoListen(settings);
   ensureSemanticShortcutListener();
+  ensureKeyboardMotorArrowNav();
   ensureSpeechEscapeToCancel();
 
   const stickyResetKeys = new Set([
@@ -3022,10 +3589,24 @@ async function boot() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "sync") return;
     if (!SYNC_SETTING_KEYS.some((k) => k in changes)) return;
+    const speechPrefsChanged =
+      "narration_volume" in changes || "voice_muted" in changes || "semantic_reader" in changes;
     if (Object.keys(changes).some((k) => stickyResetKeys.has(k))) resetStickyAdaptive();
     void loadSettings().then(async (s) => {
       await pauseDomObserverAndApplyAccessibility(s);
       setupVoiceAutoListen(s);
+      if (speechPrefsChanged) {
+        // El volumen de una utterance ya creada no cambia en vivo.
+        // Cancelamos la locución actual y, si hay cola activa, se retoma con el nuevo nivel.
+        try {
+          if ("speechSynthesis" in window && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
+            window.speechSynthesis.cancel();
+            restartSpeechQueueFromCurrentPosition();
+          }
+        } catch {
+          /* noop */
+        }
+      }
     });
   });
 
