@@ -15,6 +15,9 @@ extension/node_modules/
 extension/dist/
 *.log
 
+# Demo local (copia del build)
+web-demo/assets/widget.js
+
 # OS / IDE
 .DS_Store
 Thumbs.db

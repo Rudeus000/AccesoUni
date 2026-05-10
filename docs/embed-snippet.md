@@ -49,6 +49,10 @@ Sin extensión, los ajustes se guardan en **`localStorage`** del dominio del por
 - Si **`data-popup-url` está vacío**, un clic en el botón **no abre panel**; se anuncia por voz que puede **mantener pulsado** para comandos de voz. Los estilos y atajos en página siguen activos.
 - Para un panel completo en web, hace falta una **copia del popup sin dependencias de `chrome.*`** (trabajo aparte) servida en la misma política que permita iframe.
 
+## Demo local en el repositorio
+
+Tras `npm run build` en `extension/`, copie el widget y sirva la carpeta [`web-demo/`](../web-demo/README.md) con un servidor HTTP para probar la misma inyección en una página tipo intranet.
+
 ## WordPress
 
 - Plugins tipo **“Insert Headers and Footers”** o el hook `wp_footer` para imprimir el `<script src="…" defer …>`.
