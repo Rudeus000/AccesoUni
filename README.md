@@ -148,9 +148,11 @@ npm install
 npm run build
 ```
 
-Esto genera `dist/contentScript.js`. Para probar en **Chrome** o **Edge**: `chrome://extensions` → *Modo de desarrollador* → *Cargar descomprimida* → carpeta `extension/`.
+Esto genera `dist/contentScript.js` y **`dist/widget.js`** (misma lógica para inyección en WordPress/Wix). Para probar en **Chrome** o **Edge**: `chrome://extensions` → *Modo de desarrollador* → *Cargar descomprimida* → carpeta `extension/`.
 
 Atajo de comandos por voz en la pestaña activa: **Alt+Mayús+V** (definido en `manifest.json`).
+
+**Embed en CMS:** snippet y atributos `data-*` en [`docs/embed-snippet.md`](docs/embed-snippet.md).
 
 ---
 

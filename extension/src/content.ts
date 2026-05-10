@@ -241,7 +241,79 @@ function flattenSettingsForSync(s: Settings): Record<string, string | number | b
   };
 }
 
+/** Opciones leídas del `<script>` embebido (WordPress / Wix). */
+type AccesoUniEmbedOpts = {
+  popupUrl: string;
+  apiBase: string;
+  siteKey: string;
+  defaultProfile: string;
+};
+
+const EMBED_LOCALSTORAGE_KEY = "accessouni.embed.settings.v1";
+
+function isAccesoUniEmbedRuntime(): boolean {
+  try {
+    return Boolean((globalThis as unknown as { __ACCESSOUNI_EMBED__?: boolean }).__ACCESSOUNI_EMBED__);
+  } catch {
+    return false;
+  }
+}
+
+function getAccesoUniEmbedOpts(): AccesoUniEmbedOpts {
+  const g = globalThis as unknown as { __ACCESSOUNI_EMBED_OPTS__?: Partial<AccesoUniEmbedOpts> };
+  const o = g.__ACCESSOUNI_EMBED_OPTS__ || {};
+  return {
+    popupUrl: String(o.popupUrl ?? ""),
+    apiBase: String(o.apiBase ?? ""),
+    siteKey: String(o.siteKey ?? ""),
+    defaultProfile: String(o.defaultProfile ?? "").trim(),
+  };
+}
+
+function loadEmbedStoredFlat(): Record<string, unknown> {
+  try {
+    const raw = localStorage.getItem(EMBED_LOCALSTORAGE_KEY);
+    if (!raw) return {};
+    const j = JSON.parse(raw) as unknown;
+    return j && typeof j === "object" && !Array.isArray(j) ? (j as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function settingsFromPlainObject(sync: Record<string, unknown>): Settings {
+  return {
+    ...DEFAULTS,
+    contrast: Number(sync.contrast ?? DEFAULTS.contrast),
+    font_size: Number(sync.font_size ?? DEFAULTS.font_size),
+    font_family: String(sync.font_family ?? DEFAULTS.font_family),
+    line_spacing: Number(sync.line_spacing ?? DEFAULTS.line_spacing),
+    letter_spacing: Number(sync.letter_spacing ?? DEFAULTS.letter_spacing),
+    word_spacing: Number(sync.word_spacing ?? DEFAULTS.word_spacing),
+    color_mode: String(sync.color_mode ?? DEFAULTS.color_mode),
+    focus_mode: coalesceBool(sync.focus_mode, DEFAULTS.focus_mode),
+    reduce_motion: coalesceBool(sync.reduce_motion, DEFAULTS.reduce_motion),
+    semantic_reader: coalesceBool(sync.semantic_reader, DEFAULTS.semantic_reader),
+    visual_alerts: coalesceBool(sync.visual_alerts, DEFAULTS.visual_alerts),
+    adaptive_auto: coalesceBool(sync.adaptive_auto, DEFAULTS.adaptive_auto),
+    floating_launcher: coalesceBool(sync.floating_launcher, DEFAULTS.floating_launcher),
+    voice_auto_listen: coalesceBool(sync.voice_auto_listen, DEFAULTS.voice_auto_listen),
+    extension_active: coalesceBool(sync.extension_active, DEFAULTS.extension_active),
+    voice_muted: coalesceBool(sync.voice_muted, DEFAULTS.voice_muted),
+    narration_volume: clamp(Number(sync.narration_volume ?? DEFAULTS.narration_volume), 0, 100),
+    access_profile: normalizeAccessProfile(sync.access_profile),
+  };
+}
+
 async function persistSettings(s: Settings): Promise<void> {
+  if (isAccesoUniEmbedRuntime()) {
+    try {
+      localStorage.setItem(EMBED_LOCALSTORAGE_KEY, JSON.stringify(flattenSettingsForSync(s)));
+    } catch {
+      /* cuota o modo privado */
+    }
+    return;
+  }
   await chrome.storage.sync.set(flattenSettingsForSync(s));
 }
 
@@ -435,6 +507,20 @@ function coalesceBool(v: unknown, fallback: boolean): boolean {
 }
 
 async function loadSettings(): Promise<Settings> {
+  if (isAccesoUniEmbedRuntime()) {
+    const opts = getAccesoUniEmbedOpts();
+    let base: Settings = { ...DEFAULTS };
+    const prof = normalizeAccessProfile(opts.defaultProfile || "custom");
+    if (prof !== "custom") {
+      base = mergeAccessProfilePreset(DEFAULTS.floating_launcher, prof);
+    }
+    const mergedFlat: Record<string, unknown> = {
+      ...flattenSettingsForSync(base),
+      ...loadEmbedStoredFlat(),
+    };
+    return settingsFromPlainObject(mergedFlat);
+  }
+
   const sync = await chrome.storage.sync.get([
     "contrast",
     "font_size",
@@ -455,27 +541,7 @@ async function loadSettings(): Promise<Settings> {
     "narration_volume",
     "access_profile",
   ]);
-  return {
-    ...DEFAULTS,
-    contrast: Number(sync.contrast ?? DEFAULTS.contrast),
-    font_size: Number(sync.font_size ?? DEFAULTS.font_size),
-    font_family: String(sync.font_family ?? DEFAULTS.font_family),
-    line_spacing: Number(sync.line_spacing ?? DEFAULTS.line_spacing),
-    letter_spacing: Number(sync.letter_spacing ?? DEFAULTS.letter_spacing),
-    word_spacing: Number(sync.word_spacing ?? DEFAULTS.word_spacing),
-    color_mode: String(sync.color_mode ?? DEFAULTS.color_mode),
-    focus_mode: coalesceBool(sync.focus_mode, DEFAULTS.focus_mode),
-    reduce_motion: coalesceBool(sync.reduce_motion, DEFAULTS.reduce_motion),
-    semantic_reader: coalesceBool(sync.semantic_reader, DEFAULTS.semantic_reader),
-    visual_alerts: coalesceBool(sync.visual_alerts, DEFAULTS.visual_alerts),
-    adaptive_auto: coalesceBool(sync.adaptive_auto, DEFAULTS.adaptive_auto),
-    floating_launcher: coalesceBool(sync.floating_launcher, DEFAULTS.floating_launcher),
-    voice_auto_listen: coalesceBool(sync.voice_auto_listen, DEFAULTS.voice_auto_listen),
-    extension_active: coalesceBool(sync.extension_active, DEFAULTS.extension_active),
-    voice_muted: coalesceBool(sync.voice_muted, DEFAULTS.voice_muted),
-    narration_volume: clamp(Number(sync.narration_volume ?? DEFAULTS.narration_volume), 0, 100),
-    access_profile: normalizeAccessProfile(sync.access_profile),
-  };
+  return settingsFromPlainObject(sync as Record<string, unknown>);
 }
 
 function collectDomSignals(): {
@@ -2182,8 +2248,12 @@ function ensureSemanticShortcutListener() {
   );
 }
 
-/** El CSP de muchas páginas bloquea <style> inyectado; insertCSS del service worker no. */
+/** El CSP de muchas páginas bloquea <style> inyectado; insertCSS del service worker no. En embed siempre DOM. */
 function commitAccessibilityCss(css: string): Promise<void> {
+  if (isAccesoUniEmbedRuntime()) {
+    commitAccessibilityCssFallback(css);
+    return Promise.resolve();
+  }
   return new Promise((resolve) => {
     try {
       chrome.runtime.sendMessage({ type: "ACCESSOUNI_INSERT_CSS", css }, (res) => {
@@ -2499,6 +2569,8 @@ async function sendScanToBackend(payload: {
   wcag_score: number;
   session_id: string;
 }) {
+  if (isAccesoUniEmbedRuntime()) return;
+
   const local = await chrome.storage.local.get(["supabase_access_token"]);
   const token = local.supabase_access_token;
   let backendBaseUrl = "";
@@ -3484,10 +3556,18 @@ function mountFloatingLauncher(settings: Settings, mediaTier: MediaTier) {
         longPressTriggered = false;
         return;
       }
+      if (isAccesoUniEmbedRuntime() && !getAccesoUniEmbedOpts().popupUrl.trim()) {
+        ev.preventDefault();
+        speak("AccesoUni está activo en esta página. Mantenga pulsado el botón para comandos de voz.");
+        return;
+      }
       const isOpen = panel.classList.toggle("au-panel--open");
       fab.setAttribute("aria-expanded", isOpen ? "true" : "false");
       if (isOpen && !frame.getAttribute("src")) {
-        frame.src = chrome.runtime.getURL("popup.html");
+        const popupSrc = isAccesoUniEmbedRuntime()
+          ? getAccesoUniEmbedOpts().popupUrl.trim()
+          : chrome.runtime.getURL("popup.html");
+        if (popupSrc) frame.src = popupSrc;
       }
     });
 
@@ -3586,29 +3666,40 @@ async function boot() {
     "reduce_motion",
   ]);
 
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== "sync") return;
-    if (!SYNC_SETTING_KEYS.some((k) => k in changes)) return;
-    const speechPrefsChanged =
-      "narration_volume" in changes || "voice_muted" in changes || "semantic_reader" in changes;
-    if (Object.keys(changes).some((k) => stickyResetKeys.has(k))) resetStickyAdaptive();
-    void loadSettings().then(async (s) => {
-      await pauseDomObserverAndApplyAccessibility(s);
-      setupVoiceAutoListen(s);
-      if (speechPrefsChanged) {
-        // El volumen de una utterance ya creada no cambia en vivo.
-        // Cancelamos la locución actual y, si hay cola activa, se retoma con el nuevo nivel.
-        try {
-          if ("speechSynthesis" in window && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
-            window.speechSynthesis.cancel();
-            restartSpeechQueueFromCurrentPosition();
+  if (!isAccesoUniEmbedRuntime() && typeof chrome !== "undefined" && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "sync") return;
+      if (!SYNC_SETTING_KEYS.some((k) => k in changes)) return;
+      const speechPrefsChanged =
+        "narration_volume" in changes || "voice_muted" in changes || "semantic_reader" in changes;
+      if (Object.keys(changes).some((k) => stickyResetKeys.has(k))) resetStickyAdaptive();
+      void loadSettings().then(async (s) => {
+        await pauseDomObserverAndApplyAccessibility(s);
+        setupVoiceAutoListen(s);
+        if (speechPrefsChanged) {
+          try {
+            if ("speechSynthesis" in window && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
+              window.speechSynthesis.cancel();
+              restartSpeechQueueFromCurrentPosition();
+            }
+          } catch {
+            /* noop */
           }
-        } catch {
-          /* noop */
         }
-      }
+      });
     });
-  });
+  }
+
+  if (isAccesoUniEmbedRuntime()) {
+    window.addEventListener("storage", (ev: StorageEvent) => {
+      if (ev.key !== EMBED_LOCALSTORAGE_KEY) return;
+      void loadSettings().then(async (s) => {
+        hotkeySettings = s;
+        await pauseDomObserverAndApplyAccessibility(s);
+        setupVoiceAutoListen(s);
+      });
+    });
+  }
 
   watchUrlChanges(() => {
     lastScannedUrl = "";
@@ -3622,44 +3713,46 @@ async function boot() {
 
   setTimeout(() => scanAccessibilityAndReport(), 850);
 
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg?.type === "ACCESSOUNI_REAPPLY") {
-      void loadSettings().then(async (s) => {
-        hotkeySettings = s;
-        await pauseDomObserverAndApplyAccessibility(s);
-        setupVoiceAutoListen(s);
-        if (msg?.announceVoiceSummary === true) {
-          announceVoiceAfterProfileApply(s, buildPageAnalysis());
-        }
-      });
-      return;
-    }
-    if (msg?.type === "READ_SEMANTIC_OUTLINE") {
-      readSemanticSummary({ moveFocus: true });
-      return;
-    }
-    if (msg?.type === "READ_FULL_PAGE_ALOUD") {
-      readFullPageAloud();
-      return;
-    }
-    if (msg?.type === "READ_IMAGES_ALOUD") {
-      readImagesAloud();
-      return;
-    }
-    if (msg?.type === "START_VOICE_COMMANDS") {
-      startWebVoiceCommandsOnPage();
-      return;
-    }
-    if (msg?.type === "STOP_VOICE_COMMANDS") {
-      stopWebVoiceCommands();
-      return;
-    }
-    if (msg?.type === "VOICE_ACTIVATED") {
-      const profile = msg?.profile === "blind" ? "blind" : "standard";
-      void (profile === "blind" ? applyBlindVoiceProfileAndReapply() : applyStandardVoiceActivation());
-      return;
-    }
-  });
+  if (!isAccesoUniEmbedRuntime() && typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg?.type === "ACCESSOUNI_REAPPLY") {
+        void loadSettings().then(async (s) => {
+          hotkeySettings = s;
+          await pauseDomObserverAndApplyAccessibility(s);
+          setupVoiceAutoListen(s);
+          if (msg?.announceVoiceSummary === true) {
+            announceVoiceAfterProfileApply(s, buildPageAnalysis());
+          }
+        });
+        return;
+      }
+      if (msg?.type === "READ_SEMANTIC_OUTLINE") {
+        readSemanticSummary({ moveFocus: true });
+        return;
+      }
+      if (msg?.type === "READ_FULL_PAGE_ALOUD") {
+        readFullPageAloud();
+        return;
+      }
+      if (msg?.type === "READ_IMAGES_ALOUD") {
+        readImagesAloud();
+        return;
+      }
+      if (msg?.type === "START_VOICE_COMMANDS") {
+        startWebVoiceCommandsOnPage();
+        return;
+      }
+      if (msg?.type === "STOP_VOICE_COMMANDS") {
+        stopWebVoiceCommands();
+        return;
+      }
+      if (msg?.type === "VOICE_ACTIVATED") {
+        const profile = msg?.profile === "blind" ? "blind" : "standard";
+        void (profile === "blind" ? applyBlindVoiceProfileAndReapply() : applyStandardVoiceActivation());
+        return;
+      }
+    });
+  }
 }
 
 boot();

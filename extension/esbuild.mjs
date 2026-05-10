@@ -2,15 +2,24 @@ import esbuild from "esbuild";
 
 const isProd = process.env.NODE_ENV === "production";
 
-await esbuild.build({
-  entryPoints: ["src/content.ts"],
+const shared = {
   bundle: true,
   minify: isProd,
   sourcemap: !isProd,
   format: "iife",
   platform: "browser",
   target: "es2019",
-  outfile: "dist/contentScript.js",
   logLevel: "info",
+};
+
+await esbuild.build({
+  ...shared,
+  entryPoints: ["src/content.ts"],
+  outfile: "dist/contentScript.js",
 });
 
+await esbuild.build({
+  ...shared,
+  entryPoints: ["src/widget.ts"],
+  outfile: "dist/widget.js",
+});
