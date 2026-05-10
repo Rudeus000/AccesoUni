@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const extRoot = path.join(__dirname, "..");
 const src = path.join(extRoot, "dist", "widget.js");
-const destDir = path.join(extRoot, "..", "web-demo", "assets");
+const destDir = path.join(extRoot, "..", "web-demo", "public");
 const dest = path.join(destDir, "widget.js");
 
 if (!fs.existsSync(src)) {
@@ -14,4 +14,4 @@ if (!fs.existsSync(src)) {
 }
 fs.mkdirSync(destDir, { recursive: true });
 fs.copyFileSync(src, dest);
-console.log("[copy-widget-demo] Copiado a web-demo/assets/widget.js");
+console.log("[copy-widget-demo] Copiado a web-demo/public/widget.js");

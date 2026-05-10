@@ -46,7 +46,7 @@ Guía de alineación con criterios de contraste, tipografía, espaciado y refluj
 | `backend/` | API **FastAPI** (preferencias, integración con Supabase y rutas auxiliares). |
 | `supabase/` | Esquema SQL y políticas RLS de referencia. |
 | `dashboard/` | Panel web asociado al ecosistema (si aplica a tu despliegue). |
-| `web-demo/` | **Frontend demo** alineado al ERS v2 (landing + portal de prueba con `widget.js`). Ver [`web-demo/README.md`](web-demo/README.md). |
+| `web-demo/` | **Demo Next.js** (Tailwind, Framer Motion, Radix UI) + portal de prueba con `widget.js`. Ver [`web-demo/README.md`](web-demo/README.md). |
 
 ---
 
@@ -155,7 +155,7 @@ Atajo de comandos por voz en la pestaña activa: **Alt+Mayús+V** (definido en `
 
 **Embed en CMS:** snippet y atributos `data-*` en [`docs/embed-snippet.md`](docs/embed-snippet.md).
 
-**Demo web (ERS v2):** landing y página de prueba para validar la inyección en [`web-demo/`](web-demo/README.md).
+**Demo web (ERS v2):** Next.js + Tailwind + Motion + Radix en [`web-demo/`](web-demo/README.md) (`npm run dev` en esa carpeta).
 
 ---
 

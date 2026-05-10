@@ -15,8 +15,10 @@ extension/node_modules/
 extension/dist/
 *.log
 
-# Demo local (copia del build)
-web-demo/assets/widget.js
+# Demo Next.js
+web-demo/node_modules/
+web-demo/.next/
+web-demo/public/widget.js
 
 # OS / IDE
 .DS_Store

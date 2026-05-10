@@ -51,7 +51,7 @@ Sin extensión, los ajustes se guardan en **`localStorage`** del dominio del por
 
 ## Demo local en el repositorio
 
-Tras `npm run build` en `extension/`, copie el widget y sirva la carpeta [`web-demo/`](../web-demo/README.md) con un servidor HTTP para probar la misma inyección en una página tipo intranet.
+Tras `npm run build` en `extension/`, el widget queda en `web-demo/public/widget.js`. Levante la demo **Next.js**: `cd web-demo && npm install && npm run dev` (véase [`web-demo/README.md`](../web-demo/README.md)).
 
 ## WordPress
 

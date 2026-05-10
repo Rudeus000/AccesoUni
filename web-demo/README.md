@@ -1,17 +1,15 @@
-# Demo web AccesoUni (ERS v2)
+# AccesoUni — demo web (Next.js)
 
-Sitio estático de presentación alineado con la **Especificación de Requerimientos de Software v2** (normativa WCAG 2.1 AA, SUNEDU/MINEDU, Ley 29733, stack FastAPI + Supabase + MV3).
+Front de presentación alineado al **ERS v2** (normativa, RU, CAR, stack) con **Next.js 14**, **Tailwind CSS**, **Framer Motion** y **Radix UI** (menú de escritorio, diálogo móvil, separadores).
 
-## Contenido
+## Requisitos
 
-| Archivo | Uso |
-|---------|-----|
-| `index.html` | Landing con RU01–RU06, CAR y arquitectura. |
-| `portal-prueba.html` | Página “intranet” fea a propósito + carga de `assets/widget.js`. |
+- Node 18+
+- `extension/dist/widget.js` generado antes (o se avisa en consola al arrancar).
 
-## Ver la inyección del widget
+## Primer uso
 
-1. Compilar la extensión (y copiar el widget aquí):
+1. Compilar el widget (y copia automática a `public/` vía `postbuild` de la extensión):
 
    ```bash
    cd extension
@@ -19,21 +17,30 @@ Sitio estático de presentación alineado con la **Especificación de Requerimie
    npm run build
    ```
 
-   El `postbuild` copia `dist/widget.js` → `web-demo/assets/widget.js`.
-
-2. Servir **esta carpeta** por HTTP (no uses `file://`):
+2. Instalar y levantar la demo:
 
    ```bash
    cd web-demo
-   npx --yes serve . -p 4173
+   npm install
+   npm run dev
    ```
 
-3. Abrir `http://localhost:4173` y luego **Portal de prueba**. Debe aparecer el FAB AccesoUni; el perfil inicial es `vision` (atributo `data-profile` en el `<script>`).
+3. Abrir [http://localhost:4173](http://localhost:4173) y **Portal de prueba** para validar el FAB y los estilos inyectados.
 
-## Nota sobre el panel (popup)
+En cada `npm run dev` y `npm run build` de `web-demo` se ejecuta `scripts/sync-widget.mjs`, que copia `../extension/dist/widget.js` → `public/widget.js` si existe.
 
-El `popup.html` de la extensión usa APIs de Chrome. En embed, `data-popup-url` está vacío: el clic en el FAB anuncia por voz que puede usar **mantener pulsado** para comandos de voz; los estilos se aplican igual.
+## Producción
 
-## Enlace roto a Markdown desde `index.html`
+```bash
+npm run build
+npm start
+```
 
-El enlace “Guía WCAG (repo)” apunta a `../docs/...md`; solo funciona si sirves el repo completo. Para la demo en `serve` solo de `web-demo/`, use la copia en GitHub o abra el archivo desde el IDE.
+## Estructura
+
+| Ruta | Contenido |
+|------|-----------|
+| `src/app/page.tsx` | Landing ERS (secciones con animación al scroll). |
+| `src/app/portal-prueba/page.tsx` | Intranet simulada + `<Script src="/widget.js" />`. |
+| `src/components/SiteHeader.tsx` | Radix `NavigationMenu` + `Dialog` móvil, motion en cabecera. |
+| `public/widget.js` | **No versionado**; generado por el build de `extension/`. |
