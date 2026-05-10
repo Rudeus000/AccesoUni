@@ -32,6 +32,10 @@ Panel de ajustes **AccesoUni** sobre un portal real (ejemplo: [ELP](https://www.
 
 En `docs/screenshots/` se incluye además material de referencia para la presentación del repositorio.
 
+### Accesibilidad (WCAG 2.1 AA)
+
+Guía de alineación con criterios de contraste, tipografía, espaciado y reflujo — y qué cubre AccesoUni frente al sitio: [`docs/wcag-21-aa-guia-accesouni.md`](docs/wcag-21-aa-guia-accesouni.md).
+
 ---
 
 ## Estructura del monorepositorio
